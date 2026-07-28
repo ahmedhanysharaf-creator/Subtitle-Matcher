@@ -1,0 +1,130 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subtitle Matcher — Match & Rename Subtitles</title>
+  <meta name="description" content="Local tool for visually matching subtitle files to films or episodes, then renaming them automatically." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════ HEADER ═══════ -->
+  <header id="app-header">
+    <div class="logo">
+      <span class="logo-icon">🎬</span>
+      <span class="logo-text">Subtitle <span class="logo-accent">Matcher</span></span>
+    </div>
+
+    <div class="path-controls">
+      <div class="path-group">
+        <label for="source-path">Source Folder</label>
+        <div class="path-input-row">
+          <input id="source-path" type="text" placeholder="Paste a folder path or click 📂 to browse…" autocomplete="off" />
+          <button id="browse-source-btn" class="icon-btn" title="Browse for source folder">📂</button>
+          <button id="load-btn" class="load-btn" title="Load folder">Load</button>
+        </div>
+      </div>
+
+      <div class="path-group">
+        <label for="dest-path">Destination Folder <span class="label-hint">(for loose files only)</span></label>
+        <div class="path-input-row">
+          <input id="dest-path" type="text" placeholder="Optional — where to move renamed loose subtitles…" autocomplete="off" />
+          <button id="browse-dest-btn" class="icon-btn" title="Browse for destination folder">📂</button>
+        </div>
+      </div>
+    </div>
+
+    <button id="done-btn" class="done-btn" disabled>
+      <span class="done-icon">✓</span> Apply Matches
+    </button>
+  </header>
+
+  <!-- ═══════ BREADCRUMB ═══════ -->
+  <nav id="breadcrumb" class="breadcrumb" aria-label="Folder navigation"></nav>
+
+  <!-- ═══════ MAIN PANELS ═══════ -->
+  <main id="main-panels">
+
+    <!-- Left: Subtitles -->
+    <section class="panel" id="subtitle-panel">
+      <div class="panel-header">
+        <span class="panel-header-icon">📄</span>
+        <h2>Subtitles</h2>
+        <span class="panel-count" id="sub-count">—</span>
+      </div>
+      <div class="panel-hint" id="subtitle-hint">
+        <span class="hint-step">① Click a subtitle to select it</span>
+      </div>
+      <div class="panel-body" id="subtitle-list">
+        <div class="splash-state">
+          <div class="splash-icon">📁</div>
+          <p>Load a folder to get started</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="panel-divider">
+      <div class="divider-line"></div>
+    </div>
+
+    <!-- Right: Films / Episodes -->
+    <section class="panel" id="video-panel">
+      <div class="panel-header">
+        <span class="panel-header-icon">🎬</span>
+        <h2>Films / Episodes</h2>
+        <span class="panel-count" id="vid-count">—</span>
+      </div>
+      <div class="panel-hint" id="video-hint">
+        <span class="hint-step">② Then click the matching film</span>
+      </div>
+      <div class="panel-body" id="video-list">
+        <div class="splash-state">
+          <div class="splash-icon">🎬</div>
+          <p>Load a folder to get started</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════ MATCHES BAR ═══════ -->
+  <footer id="matches-bar">
+    <div class="matches-bar-header">
+      <div class="matches-bar-title">
+        <span>Matches</span>
+        <span class="matches-count" id="match-count">0 pairs</span>
+      </div>
+      <button id="clear-matches-btn" class="clear-btn" title="Remove all matches">Clear All</button>
+    </div>
+    <div class="matches-list" id="matches-list">
+      <div class="no-matches-msg">No matches yet — select a subtitle then a film to pair them.</div>
+    </div>
+  </footer>
+
+  <!-- ═══════ RESULTS MODAL ═══════ -->
+  <div id="results-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-box">
+      <h3 id="modal-title">Rename Results</h3>
+      <div class="modal-results" id="modal-results"></div>
+      <div class="modal-actions">
+        <button id="modal-close-btn" class="done-btn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TOAST ═══════ -->
+  <div id="toast" class="toast hidden" role="alert"></div>
+
+  <!-- ═══════ LOADING OVERLAY ═══════ -->
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="spinner"></div>
+    <p id="loading-text">Loading…</p>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
