@@ -1,4 +1,4 @@
-﻿/* ═══════════════════════════════════════════
+/* ═══════════════════════════════════════════
    SUBTITLE MATCHER — Premium Dark UI
    ═══════════════════════════════════════════ */
 
@@ -95,11 +95,12 @@ body {
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-shrink: 0;
   user-select: none;
 }
 .logo-icon { font-size: 26px; }
+.logo-text-group { display: flex; flex-direction: column; }
 .logo-text {
   font-size: 18px;
   font-weight: 700;
@@ -112,6 +113,61 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+.github-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  text-decoration: none;
+  transition: all var(--transition);
+}
+.github-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  border-color: var(--border-bright);
+  transform: translateY(-1px);
+}
+.github-icon { flex-shrink: 0; }
+
+.header-action-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.auto-match-btn {
+  flex-shrink: 0;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  border-radius: var(--radius-md);
+  color: #38bdf8;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.auto-match-btn:hover {
+  background: rgba(6, 182, 212, 0.22);
+  border-color: rgba(6, 182, 212, 0.6);
+  color: #7dd3fc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.25);
+}
+.sparkle-icon { font-size: 14px; }
 
 .path-controls {
   flex: 1;

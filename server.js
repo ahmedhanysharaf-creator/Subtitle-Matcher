@@ -8,8 +8,8 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.m4v'];
-const SUBTITLE_EXTENSIONS = ['.srt'];
+const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.m4v', '.webm', '.flv', '.ts', '.m2ts', '.ogv', '.divx', '.3gp', '.mpg', '.mpeg'];
+const SUBTITLE_EXTENSIONS = ['.srt', '.ass', '.vtt', '.sub', '.ssa', '.sbv', '.idx'];
 
 // ─────────────────────────────────────────────────────────
 // Browse a folder
@@ -66,9 +66,9 @@ app.get('/api/browse', (req, res) => {
 app.get('/api/open-dialog', (req, res) => {
   const tmpScript = path.join(os.tmpdir(), 'subtitle_matcher_dialog.ps1');
   const psScript = `
-Add-Type -AssemblyName System.Windows.Forms
+[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = "Select Folder"
+$dialog.Description = "Select Subtitle / Video Folder"
 $dialog.ShowNewFolderButton = $true
 $result = $dialog.ShowDialog()
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
@@ -82,9 +82,9 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
     return res.status(500).json({ error: 'Cannot write temp script: ' + err.message });
   }
 
-  exec(`powershell -ExecutionPolicy Bypass -File "${tmpScript}"`, { timeout: 120000 }, (err, stdout, stderr) => {
+  exec(`powershell -Sta -ExecutionPolicy Bypass -File "${tmpScript}"`, { timeout: 120000 }, (err, stdout, stderr) => {
     try { fs.unlinkSync(tmpScript); } catch (_) {}
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ error: err.message || 'Folder dialog failed or timed out' });
     const selectedPath = stdout.trim();
     if (!selectedPath) return res.json({ cancelled: true });
     res.json({ path: selectedPath });
@@ -101,7 +101,7 @@ app.post('/api/rename', (req, res) => {
   const results = [];
 
   for (const pair of pairs) {
-    const { subtitlePath, videoPath, isInSubfolder } = pair;
+    const { subtitlePath, videoPath } = pair;
     try {
       if (!fs.existsSync(subtitlePath)) {
         results.push({ success: false, subtitlePath, error: 'Subtitle file not found' });
@@ -117,34 +117,33 @@ app.post('/api/rename', (req, res) => {
       let newSubtitlePath;
       let newVideoPath = null;
 
-      if (!isInSubfolder && destinationFolder) {
-        // Ensure destination folder exists
-        if (!fs.existsSync(destinationFolder)) {
-          fs.mkdirSync(destinationFolder, { recursive: true });
+      if (destinationFolder && destinationFolder.trim()) {
+        const targetDest = destinationFolder.trim();
+        if (!fs.existsSync(targetDest)) {
+          fs.mkdirSync(targetDest, { recursive: true });
         }
-        // Move subtitle (renamed) to destination
-        newSubtitlePath = path.join(destinationFolder, newSubtitleFileName);
-        // Move video file to destination (keeping original name)
-        newVideoPath = path.join(destinationFolder, videoBaseName + videoExt);
+        newSubtitlePath = path.join(targetDest, newSubtitleFileName);
+        newVideoPath = path.join(targetDest, videoBaseName + videoExt);
       } else {
-        // Rename in-place (subtitle only)
         newSubtitlePath = path.join(subtitleDir, newSubtitleFileName);
       }
 
-      // Move / rename subtitle
-      try {
-        fs.renameSync(subtitlePath, newSubtitlePath);
-      } catch (renameErr) {
-        if (renameErr.code === 'EXDEV') {
-          fs.copyFileSync(subtitlePath, newSubtitlePath);
-          fs.unlinkSync(subtitlePath);
-        } else {
-          throw renameErr;
+      // Safe rename for subtitle (only rename/move if path changes)
+      if (path.resolve(subtitlePath) !== path.resolve(newSubtitlePath)) {
+        try {
+          fs.renameSync(subtitlePath, newSubtitlePath);
+        } catch (renameErr) {
+          if (renameErr.code === 'EXDEV') {
+            fs.copyFileSync(subtitlePath, newSubtitlePath);
+            fs.unlinkSync(subtitlePath);
+          } else {
+            throw renameErr;
+          }
         }
       }
 
-      // Move video file to destination (if destination is set)
-      if (newVideoPath && fs.existsSync(videoPath)) {
+      // Move video file to destination if requested and path changes
+      if (newVideoPath && fs.existsSync(videoPath) && path.resolve(videoPath) !== path.resolve(newVideoPath)) {
         try {
           fs.renameSync(videoPath, newVideoPath);
         } catch (renameErr) {
@@ -177,7 +176,10 @@ app.post('/api/rename', (req, res) => {
 // Start server
 // ─────────────────────────────────────────────────────────
 const PORT = 3000;
-app.listen(PORT, () => {
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => {
   console.log('\n🎬 Subtitle Matcher is running!');
-  console.log(`   Open: http://localhost:${PORT}\n`);
+  console.log(`   Local access:   http://localhost:${PORT}`);
+  console.log(`   Network access: http://10.152.204.132:${PORT}\n`);
 });
+

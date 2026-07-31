@@ -53,6 +53,7 @@ const dom = {
   toast:         $('toast'),
   loading:       $('loading-overlay'),
   loadingText:   $('loading-text'),
+  autoMatchBtn:  $('auto-match-btn'),
 };
 
 // ─────────────────────────────────────────────────────────
@@ -199,6 +200,105 @@ function clearAllMatches() {
   state.pendingItem = null;
   renderAll();
   updateDoneButton();
+}
+
+function extractEpisodeKey(filename) {
+  const cleanName = filename.toLowerCase();
+
+  // Pattern 1: S01E05 or s1e5 or 1x05
+  const sEpMatch = cleanName.match(/s(\d+)\s*e(\d+)|(\d+)x(\d+)/i);
+  if (sEpMatch) {
+    const season = parseInt(sEpMatch[1] || sEpMatch[3], 10);
+    const episode = parseInt(sEpMatch[2] || sEpMatch[4], 10);
+    return `S${season}E${episode}`;
+  }
+
+  // Pattern 2: E05 or Ep 05 or Episode 05
+  const epMatch = cleanName.match(/(?:ep|episode|e)[._\s-]*(\d+)/i);
+  if (epMatch) {
+    const episode = parseInt(epMatch[1], 10);
+    return `E${episode}`;
+  }
+
+  // Pattern 3: Standalone numbers like "05" or "5"
+  const numMatch = cleanName.match(/(?:^|[\s._\-\[\(])(\d{1,3})(?:$|[\s._\-\]\)])/);
+  if (numMatch) {
+    return `NUM_${parseInt(numMatch[1], 10)}`;
+  }
+
+  return null;
+}
+
+function autoMatch() {
+  const unmatchedSubs = state.subtitles.filter(s => !getMatchForItem('subtitle', s));
+  const unmatchedVids = state.videos.filter(v => !getMatchForItem('video', v));
+
+  if (unmatchedSubs.length === 0 || unmatchedVids.length === 0) {
+    showToast('No unmatched subtitle and film files available', 'info');
+    return;
+  }
+
+  let matchedCount = 0;
+
+  // 1. Match by extracted episode/season keys
+  const vidKeyMap = new Map();
+  unmatchedVids.forEach(v => {
+    const key = extractEpisodeKey(v.name);
+    if (key && !vidKeyMap.has(key)) {
+      vidKeyMap.set(key, v);
+    }
+  });
+
+  const remainingSubs = [];
+  unmatchedSubs.forEach(sub => {
+    const subKey = extractEpisodeKey(sub.name);
+    if (subKey && vidKeyMap.has(subKey)) {
+      const vid = vidKeyMap.get(subKey);
+      vidKeyMap.delete(subKey);
+
+      state.matchCounter++;
+      const color = BADGE_COLORS[(state.matchCounter - 1) % BADGE_COLORS.length];
+      state.matches.push({
+        id: Date.now() + Math.random(),
+        subtitle: sub,
+        video: vid,
+        number: state.matchCounter,
+        color,
+        isInSubfolder: state.currentPath !== state.rootPath,
+      });
+      matchedCount++;
+    } else {
+      remainingSubs.push(sub);
+    }
+  });
+
+  // 2. Index-based 1:1 fallback if counts match exactly and no key matches were found
+  const remainingVids = unmatchedVids.filter(v => !state.matches.some(m => m.video.path === v.path));
+  if (matchedCount === 0 && remainingSubs.length > 0 && remainingSubs.length === remainingVids.length) {
+    for (let i = 0; i < remainingSubs.length; i++) {
+      state.matchCounter++;
+      const color = BADGE_COLORS[(state.matchCounter - 1) % BADGE_COLORS.length];
+      state.matches.push({
+        id: Date.now() + Math.random(),
+        subtitle: remainingSubs[i],
+        video: remainingVids[i],
+        number: state.matchCounter,
+        color,
+        isInSubfolder: state.currentPath !== state.rootPath,
+      });
+      matchedCount++;
+    }
+  }
+
+  state.pendingItem = null;
+  renderAll();
+  updateDoneButton();
+
+  if (matchedCount > 0) {
+    showToast(`✨ Automatically matched ${matchedCount} pair${matchedCount > 1 ? 's' : ''}!`, 'success');
+  } else {
+    showToast('Could not auto-determine matching pairs', 'info');
+  }
 }
 
 // ─────────────────────────────────────────────────────────
@@ -662,6 +762,11 @@ dom.browseDest.addEventListener('click', async () => {
 
 // Done button
 dom.doneBtn.addEventListener('click', applyMatches);
+
+// Auto Match button
+if (dom.autoMatchBtn) {
+  dom.autoMatchBtn.addEventListener('click', autoMatch);
+}
 
 // Clear all matches
 dom.clearBtn.addEventListener('click', () => {

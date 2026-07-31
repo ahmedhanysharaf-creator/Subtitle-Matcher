@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -15,7 +15,13 @@
   <header id="app-header">
     <div class="logo">
       <span class="logo-icon">🎬</span>
-      <span class="logo-text">Subtitle <span class="logo-accent">Matcher</span></span>
+      <div class="logo-text-group">
+        <span class="logo-text">Subtitle <span class="logo-accent">Matcher</span></span>
+      </div>
+      <a href="https://github.com/ahmedhanysharaf-creator/Subtitle-Matcher" target="_blank" rel="noopener noreferrer" class="github-btn" title="View repository on GitHub">
+        <svg class="github-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span>GitHub</span>
+      </a>
     </div>
 
     <div class="path-controls">
@@ -29,17 +35,23 @@
       </div>
 
       <div class="path-group">
-        <label for="dest-path">Destination Folder <span class="label-hint">(for loose files only)</span></label>
+        <label for="dest-path">Destination Folder <span class="label-hint">(optional — target folder for renamed files)</span></label>
         <div class="path-input-row">
-          <input id="dest-path" type="text" placeholder="Optional — where to move renamed loose subtitles…" autocomplete="off" />
+          <input id="dest-path" type="text" placeholder="Optional — destination path to move renamed subtitles & videos…" autocomplete="off" />
           <button id="browse-dest-btn" class="icon-btn" title="Browse for destination folder">📂</button>
         </div>
       </div>
     </div>
 
-    <button id="done-btn" class="done-btn" disabled>
-      <span class="done-icon">✓</span> Apply Matches
-    </button>
+    <div class="header-action-group">
+      <button id="auto-match-btn" class="auto-match-btn" title="Automatically match subtitles to movies by episode or number sequence">
+        <span class="sparkle-icon">✨</span> Auto Match
+      </button>
+
+      <button id="done-btn" class="done-btn" disabled>
+        <span class="done-icon">✓</span> Apply Matches
+      </button>
+    </div>
   </header>
 
   <!-- ═══════ BREADCRUMB ═══════ -->
@@ -61,7 +73,7 @@
       <div class="panel-body" id="subtitle-list">
         <div class="splash-state">
           <div class="splash-icon">📁</div>
-          <p>Load a folder to get started</p>
+          <p>Load a folder path above to display subtitle & film files</p>
         </div>
       </div>
     </section>
@@ -83,7 +95,7 @@
       <div class="panel-body" id="video-list">
         <div class="splash-state">
           <div class="splash-icon">🎬</div>
-          <p>Load a folder to get started</p>
+          <p>Load a folder path above to display subtitle & film files</p>
         </div>
       </div>
     </section>
@@ -97,10 +109,12 @@
         <span>Matches</span>
         <span class="matches-count" id="match-count">0 pairs</span>
       </div>
-      <button id="clear-matches-btn" class="clear-btn" title="Remove all matches">Clear All</button>
+      <div class="matches-header-actions">
+        <button id="clear-matches-btn" class="clear-btn" title="Remove all matches">Clear All</button>
+      </div>
     </div>
     <div class="matches-list" id="matches-list">
-      <div class="no-matches-msg">No matches yet — select a subtitle then a film to pair them.</div>
+      <div class="no-matches-msg">No matches yet — click ✨ Auto Match or pair subtitles and films manually.</div>
     </div>
   </footer>
 

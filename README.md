@@ -15,8 +15,8 @@ A local web app to manually match subtitle files (`.srt`) to their movies, renam
 
 1. **Download or clone this project**
    ```
-   git clone https://github.com/YOUR_USERNAME/subtitle-matcher.git
-   cd subtitle-matcher
+   git clone https://github.com/ahmedhanysharaf-creator/Subtitle-Matcher.git
+   cd Subtitle-Matcher
    ```
 
 2. **Install dependencies** (only needed once)
@@ -31,17 +31,17 @@ A local web app to manually match subtitle files (`.srt`) to their movies, renam
 
 4. **Open your browser** and go to:
    ```
-   http://localhost:3000
+   http://localhost:3000   (or http://10.152.204.132:3000 over LAN)
    ```
 
 ---
 
 ## 🧭 How to Use
 
-1. **Set Source Folder** — the folder containing your subtitle (`.srt`) and video files
-2. **Set Destination Folder** — where you want the renamed files to end up
-3. **Match pairs** — click a subtitle, then click its matching movie (they get colour-coded)
-4. Click **Done** — the subtitles are renamed and **both the subtitle and movie** are moved to the destination folder
+1. **Set Source Folder** — the folder containing your subtitle and video files
+2. **Set Destination Folder** — optional target folder where you want the renamed files to be moved
+3. **Auto Match / Manual Match** — click **✨ Auto Match** to pair by episode number automatically, or select a subtitle then its matching film
+4. **Click Apply Matches** — subtitles are renamed to match the video filenames instantly!
 
 ---
 
@@ -49,8 +49,8 @@ A local web app to manually match subtitle files (`.srt`) to their movies, renam
 
 | Type | Extensions |
 |------|-----------|
-| Subtitles | `.srt` |
-| Videos | `.mp4`, `.mkv`, `.avi`, `.mov`, `.wmv`, `.m4v` |
+| Subtitles | `.srt`, `.ass`, `.vtt`, `.sub`, `.ssa`, `.sbv`, `.idx` |
+| Videos | `.mp4`, `.mkv`, `.avi`, `.mov`, `.wmv`, `.m4v`, `.webm`, `.flv`, `.ts`, `.m2ts`, `.ogv`, `.divx` |
 
 ---
 
