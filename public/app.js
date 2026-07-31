@@ -18,12 +18,17 @@ const SUBTITLE_EXTENSIONS = ['.srt', '.ass', '.vtt', '.sub', '.ssa', '.sbv', '.i
 const state = {
   mode: 'none', // 'fs' (File System Access API) | 'upload' (File upload / Drag drop)
   dirHandle: null,
+  parentHandles: [], // stack of parent directory handles for navigation
   folderName: '',
-  subtitles: [], // [{ name, ext, file, handle, path }]
-  videos: [],    // [{ name, ext, file, handle, path }]
-  matches: [],   // [{ id, subtitle, video, number, color }]
+  subfolders: [], // [{ name, handle, path }]
+  subtitles: [],  // [{ name, ext, file, handle, path }]
+  videos: [],     // [{ name, ext, file, handle, path }]
+  allUploadFiles: [], // For upload mode subfolder filtering
+  currentSubfolderFilter: null,
+  matches: [],    // [{ id, subtitle, video, number, color }]
   pendingItem: null,
   matchCounter: 0,
+  sidebarCollapsed: false,
 };
 
 // DOM References
@@ -37,6 +42,12 @@ const dom = {
   currentFolderLabel:$('current-folder-label'),
   mainPanels:        $('main-panels'),
   dragOverlay:       $('drag-overlay'),
+  subfoldersPanel:   $('subfolders-panel'),
+  subfoldersList:    $('subfolders-list'),
+  folderCount:       $('folder-count'),
+  toggleSidebarBtn:  $('toggle-sidebar-btn'),
+  floatingSidebarBtn:$('floating-sidebar-btn'),
+  subfolderDivider:  $('subfolder-divider'),
   subtitleList:      $('subtitle-list'),
   videoList:         $('video-list'),
   subCount:          $('sub-count'),
@@ -68,19 +79,34 @@ async function openDirectoryPicker() {
 
   try {
     const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    showLoading('Scanning folder files…');
+    await loadDirectoryHandle(handle, true);
+    showToast(`Loaded folder: ${handle.name}`, 'success');
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      showToast('❌ Could not open folder: ' + err.message, 'error');
+    }
+  }
+}
+
+async function loadDirectoryHandle(handle, isRoot = false) {
+  showLoading('Scanning folder files & subfolders…');
+  try {
+    if (isRoot) {
+      state.parentHandles = [];
+    }
 
     state.mode = 'fs';
     state.dirHandle = handle;
     state.folderName = handle.name;
+    state.subfolders = [];
     state.subtitles = [];
     state.videos = [];
-    state.matches = [];
-    state.matchCounter = 0;
     state.pendingItem = null;
 
     for await (const entry of handle.values()) {
-      if (entry.kind === 'file') {
+      if (entry.kind === 'directory') {
+        state.subfolders.push({ name: entry.name, handle: entry, path: entry.name });
+      } else if (entry.kind === 'file') {
         const ext = getFileExt(entry.name);
         if (SUBTITLE_EXTENSIONS.includes(ext)) {
           state.subtitles.push({ name: entry.name, ext, handle: entry, path: entry.name });
@@ -90,17 +116,15 @@ async function openDirectoryPicker() {
       }
     }
 
+    state.subfolders.sort(naturalSort);
     state.subtitles.sort(naturalSort);
     state.videos.sort(naturalSort);
 
-    updateModeLabel(`Local Disk Folder: <strong>${escapeHtml(handle.name)}</strong> (Direct In-Place Rename enabled)`);
+    updateModeLabel(`Local Disk Folder: <strong>${escapeHtml(handle.name)}</strong> (${state.subfolders.length} subfolders)`);
     renderAll();
     updateDoneButton();
-    showToast(`Loaded ${state.subtitles.length} subtitles & ${state.videos.length} films from ${handle.name}`, 'success');
   } catch (err) {
-    if (err.name !== 'AbortError') {
-      showToast('❌ Could not open folder: ' + err.message, 'error');
-    }
+    showToast('❌ Failed to read directory: ' + err.message, 'error');
   } finally {
     hideLoading();
   }
@@ -110,46 +134,96 @@ async function openDirectoryPicker() {
 // Drag & Drop / File Input Processing
 // ─────────────────────────────────────────────────────────
 function processFileList(files, folderName = 'Uploaded Files') {
-  showLoading('Processing uploaded files…');
+  showLoading('Processing uploaded files & folders…');
 
   state.mode = 'upload';
   state.dirHandle = null;
+  state.parentHandles = [];
   state.folderName = folderName;
+  state.allUploadFiles = Array.from(files);
+  state.subfolders = [];
   state.subtitles = [];
   state.videos = [];
-  state.matches = [];
-  state.matchCounter = 0;
   state.pendingItem = null;
 
-  Array.from(files).forEach(file => {
+  const subfolderNames = new Set();
+
+  state.allUploadFiles.forEach(file => {
+    const relPath = file.webkitRelativePath || file.name;
+    const parts = relPath.split('/').filter(Boolean);
+
+    if (parts.length > 1) {
+      subfolderNames.add(parts[0]);
+    }
+
     const ext = getFileExt(file.name);
     if (SUBTITLE_EXTENSIONS.includes(ext)) {
-      state.subtitles.push({ name: file.name, ext, file, path: file.webkitRelativePath || file.name });
+      state.subtitles.push({ name: file.name, ext, file, path: relPath });
     } else if (VIDEO_EXTENSIONS.includes(ext)) {
-      state.videos.push({ name: file.name, ext, file, path: file.webkitRelativePath || file.name });
+      state.videos.push({ name: file.name, ext, file, path: relPath });
     }
   });
 
+  state.subfolders = Array.from(subfolderNames).map(name => ({ name, path: name }));
+  state.subfolders.sort(naturalSort);
   state.subtitles.sort(naturalSort);
   state.videos.sort(naturalSort);
 
-  updateModeLabel(`Uploaded Mode: <strong>${escapeHtml(folderName)}</strong> (${state.subtitles.length} subtitles, ${state.videos.length} videos)`);
+  updateModeLabel(`Uploaded Mode: <strong>${escapeHtml(folderName)}</strong> (${state.subfolders.length} subfolders)`);
   renderAll();
   updateDoneButton();
   hideLoading();
   showToast(`Loaded ${state.subtitles.length} subtitles & ${state.videos.length} films`, 'success');
 }
 
-// Helper: Get File Extension
+function filterUploadSubfolder(subfolderName) {
+  state.currentSubfolderFilter = subfolderName;
+  showLoading(`Loading ${subfolderName}…`);
+
+  const filteredSubs = [];
+  const filteredVids = [];
+
+  state.allUploadFiles.forEach(file => {
+    const relPath = file.webkitRelativePath || file.name;
+    const parts = relPath.split('/').filter(Boolean);
+
+    if (parts.length > 1 && parts[0] === subfolderName) {
+      const ext = getFileExt(file.name);
+      if (SUBTITLE_EXTENSIONS.includes(ext)) {
+        filteredSubs.push({ name: file.name, ext, file, path: relPath });
+      } else if (VIDEO_EXTENSIONS.includes(ext)) {
+        filteredVids.push({ name: file.name, ext, file, path: relPath });
+      }
+    }
+  });
+
+  state.subtitles = filteredSubs.sort(naturalSort);
+  state.videos = filteredVids.sort(naturalSort);
+
+  updateModeLabel(`Subfolder: <strong>${escapeHtml(subfolderName)}</strong> (${state.subtitles.length} subtitles, ${state.videos.length} films)`);
+  renderAll();
+  hideLoading();
+}
+
+// Helpers
 function getFileExt(filename) {
   const idx = filename.lastIndexOf('.');
   return idx !== -1 ? filename.slice(idx).toLowerCase() : '';
 }
 
-// Helper: Get Base Name
 function getBaseName(filename) {
   const idx = filename.lastIndexOf('.');
   return idx !== -1 ? filename.slice(0, idx) : filename;
+}
+
+// ─────────────────────────────────────────────────────────
+// Sidebar Minimize / Maximize Toggle
+// ─────────────────────────────────────────────────────────
+function toggleSidebar(collapse) {
+  state.sidebarCollapsed = typeof collapse === 'boolean' ? collapse : !state.sidebarCollapsed;
+  dom.subfoldersPanel.classList.toggle('collapsed', state.sidebarCollapsed);
+  dom.subfolderDivider.classList.toggle('collapsed', state.sidebarCollapsed);
+  dom.floatingSidebarBtn.classList.toggle('hidden', !state.sidebarCollapsed);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -232,7 +306,6 @@ function clearAllMatches() {
 function extractEpisodeKey(filename) {
   const cleanName = filename.toLowerCase();
 
-  // Pattern 1: S01E05 or s1e5 or 1x05
   const sEpMatch = cleanName.match(/s(\d+)\s*e(\d+)|(\d+)x(\d+)/i);
   if (sEpMatch) {
     const season = parseInt(sEpMatch[1] || sEpMatch[3], 10);
@@ -240,14 +313,12 @@ function extractEpisodeKey(filename) {
     return `S${season}E${episode}`;
   }
 
-  // Pattern 2: E05 or Ep 05 or Episode 05
   const epMatch = cleanName.match(/(?:ep|episode|e)[._\s-]*(\d+)/i);
   if (epMatch) {
     const episode = parseInt(epMatch[1], 10);
     return `E${episode}`;
   }
 
-  // Pattern 3: Standalone numbers like "05" or "5"
   const numMatch = cleanName.match(/(?:^|[\s._\-\[\(])(\d{1,3})(?:$|[\s._\-\]\)])/);
   if (numMatch) {
     return `NUM_${parseInt(numMatch[1], 10)}`;
@@ -267,7 +338,6 @@ function autoMatch() {
 
   let matchedCount = 0;
 
-  // 1. Match by extracted episode/season keys
   const vidKeyMap = new Map();
   unmatchedVids.forEach(v => {
     const key = extractEpisodeKey(v.name);
@@ -298,7 +368,6 @@ function autoMatch() {
     }
   });
 
-  // 2. Index-based 1:1 fallback if counts match exactly
   const remainingVids = unmatchedVids.filter(v => !state.matches.some(m => m.video.name === v.name));
   if (matchedCount === 0 && remainingSubs.length > 0 && remainingSubs.length === remainingVids.length) {
     for (let i = 0; i < remainingSubs.length; i++) {
@@ -337,7 +406,6 @@ async function applyMatches() {
 
   try {
     if (state.mode === 'fs' && state.dirHandle) {
-      // Disk File System Access API mode — rename directly in local directory!
       for (const match of state.matches) {
         const videoBase = getBaseName(match.video.name);
         const subExt = match.subtitle.ext;
@@ -352,14 +420,12 @@ async function applyMatches() {
           if ('move' in match.subtitle.handle) {
             await match.subtitle.handle.move(newFileName);
           } else {
-            // Read content & write to new handle
             const file = await match.subtitle.handle.getFile();
             const content = await file.arrayBuffer();
             const newHandle = await state.dirHandle.getFileHandle(newFileName, { create: true });
             const writable = await newHandle.createWritable();
             await writable.write(content);
             await writable.close();
-            // Remove old file
             try { await state.dirHandle.removeEntry(match.subtitle.name); } catch (_) {}
           }
 
@@ -372,7 +438,6 @@ async function applyMatches() {
       hideLoading();
       showResultsModal(results, 'fs');
     } else {
-      // Browser Upload / Drag Drop Mode — prepare downloads / ZIP package
       const zip = typeof JSZip !== 'undefined' ? new JSZip() : null;
       const downloadItems = [];
 
@@ -414,9 +479,76 @@ async function applyMatches() {
 // Rendering UI
 // ─────────────────────────────────────────────────────────
 function renderAll() {
+  renderSubfoldersList();
   renderSubtitleList();
   renderVideoList();
   renderMatchesList();
+}
+
+function renderSubfoldersList() {
+  const container = dom.subfoldersList;
+  container.innerHTML = '';
+
+  dom.folderCount.textContent = state.subfolders.length;
+
+  if (state.parentHandles.length > 0) {
+    const backItem = document.createElement('div');
+    backItem.className = 'list-item folder-item parent-folder-item';
+
+    const icon = document.createElement('span');
+    icon.className = 'item-icon';
+    icon.textContent = '⬆️';
+
+    const name = document.createElement('span');
+    name.className = 'item-name';
+    name.textContent = '.. (Parent Folder)';
+
+    backItem.appendChild(icon);
+    backItem.appendChild(name);
+    backItem.addEventListener('click', () => {
+      const parent = state.parentHandles.pop();
+      if (parent) loadDirectoryHandle(parent, false);
+    });
+    container.appendChild(backItem);
+  }
+
+  if (state.subfolders.length === 0 && state.parentHandles.length === 0) {
+    container.appendChild(makeEmptyState('No subfolders found in directory'));
+    return;
+  }
+
+  state.subfolders.forEach(subfolder => {
+    const el = document.createElement('div');
+    el.className = 'list-item folder-item' + (state.currentSubfolderFilter === subfolder.name ? ' active-folder' : '');
+
+    const icon = document.createElement('span');
+    icon.className = 'item-icon';
+    icon.textContent = '📁';
+
+    const name = document.createElement('span');
+    name.className = 'item-name';
+    name.textContent = subfolder.name;
+    name.title = subfolder.name;
+
+    const arrow = document.createElement('span');
+    arrow.className = 'folder-arrow';
+    arrow.textContent = '→';
+
+    el.appendChild(icon);
+    el.appendChild(name);
+    el.appendChild(arrow);
+
+    el.addEventListener('click', () => {
+      if (state.mode === 'fs' && subfolder.handle) {
+        state.parentHandles.push(state.dirHandle);
+        loadDirectoryHandle(subfolder.handle, false);
+      } else if (state.mode === 'upload') {
+        filterUploadSubfolder(subfolder.name);
+      }
+    });
+
+    container.appendChild(el);
+  });
 }
 
 function renderSubtitleList() {
@@ -566,9 +698,7 @@ function makeMatchChip(match) {
   return el;
 }
 
-// ─────────────────────────────────────────────────────────
-// Results & Export Modal
-// ─────────────────────────────────────────────────────────
+// Results Modal
 function showResultsModal(results, type, exportData = null) {
   dom.modalResults.innerHTML = '';
   dom.modalActions.innerHTML = '';
@@ -641,9 +771,7 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-// ─────────────────────────────────────────────────────────
-// UI Helpers & Drag Drop Handling
-// ─────────────────────────────────────────────────────────
+// UI Helpers
 function updateDoneButton() {
   dom.doneBtn.disabled = state.matches.length === 0;
 }
@@ -676,9 +804,7 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// ─────────────────────────────────────────────────────────
-// Drag & Drop Setup
-// ─────────────────────────────────────────────────────────
+// Drag & Drop
 ['dragenter', 'dragover'].forEach(eventName => {
   window.addEventListener(eventName, e => {
     e.preventDefault();
@@ -702,9 +828,7 @@ window.addEventListener('drop', e => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
 // Event Listeners
-// ─────────────────────────────────────────────────────────
 dom.selectFolderBtn.addEventListener('click', openDirectoryPicker);
 
 dom.uploadFolderInput.addEventListener('change', e => {
@@ -712,6 +836,13 @@ dom.uploadFolderInput.addEventListener('change', e => {
     processFileList(e.target.files, 'Uploaded Folder');
   }
 });
+
+if (dom.toggleSidebarBtn) {
+  dom.toggleSidebarBtn.addEventListener('click', () => toggleSidebar());
+}
+if (dom.floatingSidebarBtn) {
+  dom.floatingSidebarBtn.addEventListener('click', () => toggleSidebar(false));
+}
 
 dom.autoMatchBtn.addEventListener('click', autoMatch);
 dom.doneBtn.addEventListener('click', applyMatches);

@@ -68,7 +68,34 @@
       </div>
     </div>
 
-    <!-- Left: Subtitles -->
+    <!-- Far Left: Subfolders Sidebar -->
+    <aside class="panel subfolders-sidebar" id="subfolders-panel">
+      <div class="panel-header">
+        <span class="panel-header-icon">📁</span>
+        <h2>Subfolders</h2>
+        <span class="panel-count" id="folder-count">—</span>
+        <button id="toggle-sidebar-btn" class="toggle-sidebar-btn" title="Minimize / Maximize subfolders panel">«</button>
+      </div>
+      <div class="panel-hint" id="folder-hint">
+        <span class="hint-step">Click a folder to browse</span>
+      </div>
+      <div class="panel-body" id="subfolders-list">
+        <div class="splash-state">
+          <div class="splash-icon">📁</div>
+          <p>Select a folder to view subfolders</p>
+        </div>
+      </div>
+    </aside>
+
+    <button id="floating-sidebar-btn" class="floating-sidebar-btn hidden" title="Expand subfolders panel">
+      📁 Subfolders »
+    </button>
+
+    <div class="panel-divider" id="subfolder-divider">
+      <div class="divider-line"></div>
+    </div>
+
+    <!-- Middle: Subtitles -->
     <section class="panel" id="subtitle-panel">
       <div class="panel-header">
         <span class="panel-header-icon">📄</span>

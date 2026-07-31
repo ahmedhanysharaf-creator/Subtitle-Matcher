@@ -246,6 +246,97 @@ body {
   background: var(--bg-panel);
   overflow: hidden;
 }
+
+/* SUBFOLDERS SIDEBAR PANEL */
+.subfolders-sidebar {
+  max-width: 280px;
+  flex: 0 0 250px;
+  transition: all 0.22s ease;
+  border-right: 1px solid var(--border-subtle);
+}
+.subfolders-sidebar.collapsed {
+  flex: 0 0 0;
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  display: none;
+}
+.panel-divider.collapsed { display: none; }
+
+.toggle-sidebar-btn {
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 2px 8px;
+  transition: all var(--transition);
+}
+.toggle-sidebar-btn:hover {
+  background: var(--bg-glass-hover);
+  color: var(--text-primary);
+  border-color: var(--border-mid);
+}
+
+.floating-sidebar-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 40;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  color: #a78bfa;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  box-shadow: var(--shadow-soft);
+  transition: all var(--transition);
+}
+.floating-sidebar-btn:hover {
+  background: var(--bg-item-hover);
+  color: var(--text-primary);
+  transform: scale(1.03);
+}
+
+.folder-item {
+  color: var(--text-secondary);
+  border-left-color: transparent !important;
+}
+.folder-item:hover {
+  color: var(--text-primary);
+  background: var(--bg-item-hover);
+}
+.folder-arrow {
+  color: var(--text-muted);
+  font-size: 14px;
+  transition: transform var(--transition), color var(--transition);
+  margin-left: auto;
+}
+.folder-item:hover .folder-arrow {
+  color: var(--accent-2);
+  transform: translateX(3px);
+}
+.parent-folder-item {
+  font-weight: 600;
+  color: var(--accent-1);
+  background: rgba(124,58,237,0.06);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.parent-folder-item:hover {
+  background: rgba(124,58,237,0.15);
+  color: #c4b5fd;
+}
+.active-folder {
+  background: rgba(6, 182, 212, 0.15) !important;
+  color: #7dd3fc !important;
+  font-weight: 600;
+}
+
 .panel-divider { width: 2px; background: var(--border-subtle); position: relative; }
 .divider-line { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 0%, var(--accent-1) 50%, transparent 100%); opacity: 0.3; }
 
