@@ -104,9 +104,12 @@ async function loadDirectoryHandle(handle, isRoot = false) {
     state.pendingItem = null;
 
     for await (const entry of handle.values()) {
-      if (entry.kind === 'directory') {
+      const isDir = entry.kind === 'directory' || (entry.kind === undefined && entry.isDirectory);
+      const isFile = entry.kind === 'file' || (entry.kind === undefined && entry.isFile);
+
+      if (isDir) {
         state.subfolders.push({ name: entry.name, handle: entry, path: entry.name });
-      } else if (entry.kind === 'file') {
+      } else if (isFile || entry.kind === 'file') {
         const ext = getFileExt(entry.name);
         if (SUBTITLE_EXTENSIONS.includes(ext)) {
           state.subtitles.push({ name: entry.name, ext, handle: entry, path: entry.name });
@@ -120,7 +123,7 @@ async function loadDirectoryHandle(handle, isRoot = false) {
     state.subtitles.sort(naturalSort);
     state.videos.sort(naturalSort);
 
-    updateModeLabel(`Local Disk Folder: <strong>${escapeHtml(handle.name)}</strong> (${state.subfolders.length} subfolders)`);
+    updateModeLabel(`Local Disk Folder: <strong>${escapeHtml(handle.name)}</strong> (${state.subfolders.length} subfolder${state.subfolders.length !== 1 ? 's' : ''})`);
     renderAll();
     updateDoneButton();
   } catch (err) {
@@ -145,26 +148,36 @@ function processFileList(files, folderName = 'Uploaded Files') {
   state.subtitles = [];
   state.videos = [];
   state.pendingItem = null;
+  state.currentSubfolderFilter = null;
 
-  const subfolderNames = new Set();
+  const subfolderMap = new Map();
 
   state.allUploadFiles.forEach(file => {
     const relPath = file.webkitRelativePath || file.name;
     const parts = relPath.split('/').filter(Boolean);
 
-    if (parts.length > 1) {
-      subfolderNames.add(parts[0]);
+    let subfolderName = null;
+    if (parts.length > 2) {
+      subfolderName = parts[1]; // Subfolder inside root selected folder
+    } else if (parts.length === 2) {
+      subfolderName = parts[0];
+    }
+
+    if (subfolderName) {
+      if (!subfolderMap.has(subfolderName)) {
+        subfolderMap.set(subfolderName, { name: subfolderName, path: subfolderName });
+      }
     }
 
     const ext = getFileExt(file.name);
     if (SUBTITLE_EXTENSIONS.includes(ext)) {
-      state.subtitles.push({ name: file.name, ext, file, path: relPath });
+      state.subtitles.push({ name: file.name, ext, file, path: relPath, subfolder: subfolderName });
     } else if (VIDEO_EXTENSIONS.includes(ext)) {
-      state.videos.push({ name: file.name, ext, file, path: relPath });
+      state.videos.push({ name: file.name, ext, file, path: relPath, subfolder: subfolderName });
     }
   });
 
-  state.subfolders = Array.from(subfolderNames).map(name => ({ name, path: name }));
+  state.subfolders = Array.from(subfolderMap.values());
   state.subfolders.sort(naturalSort);
   state.subtitles.sort(naturalSort);
   state.videos.sort(naturalSort);
@@ -173,12 +186,12 @@ function processFileList(files, folderName = 'Uploaded Files') {
   renderAll();
   updateDoneButton();
   hideLoading();
-  showToast(`Loaded ${state.subtitles.length} subtitles & ${state.videos.length} films`, 'success');
+  showToast(`Loaded ${state.subtitles.length} subtitles & ${state.videos.length} films (${state.subfolders.length} subfolders)`, 'success');
 }
 
 function filterUploadSubfolder(subfolderName) {
   state.currentSubfolderFilter = subfolderName;
-  showLoading(`Loading ${subfolderName}…`);
+  showLoading(subfolderName ? `Loading subfolder ${subfolderName}…` : 'Loading all files…');
 
   const filteredSubs = [];
   const filteredVids = [];
@@ -187,7 +200,16 @@ function filterUploadSubfolder(subfolderName) {
     const relPath = file.webkitRelativePath || file.name;
     const parts = relPath.split('/').filter(Boolean);
 
-    if (parts.length > 1 && parts[0] === subfolderName) {
+    let belongs = false;
+    if (!subfolderName) {
+      belongs = true; // All files
+    } else if (parts.length > 2 && parts[1] === subfolderName) {
+      belongs = true;
+    } else if (parts.length === 2 && parts[0] === subfolderName) {
+      belongs = true;
+    }
+
+    if (belongs) {
       const ext = getFileExt(file.name);
       if (SUBTITLE_EXTENSIONS.includes(ext)) {
         filteredSubs.push({ name: file.name, ext, file, path: relPath });
@@ -200,7 +222,7 @@ function filterUploadSubfolder(subfolderName) {
   state.subtitles = filteredSubs.sort(naturalSort);
   state.videos = filteredVids.sort(naturalSort);
 
-  updateModeLabel(`Subfolder: <strong>${escapeHtml(subfolderName)}</strong> (${state.subtitles.length} subtitles, ${state.videos.length} films)`);
+  updateModeLabel(subfolderName ? `Subfolder: <strong>${escapeHtml(subfolderName)}</strong>` : `Uploaded Mode: <strong>${escapeHtml(state.folderName)}</strong>`);
   renderAll();
   hideLoading();
 }
@@ -491,6 +513,7 @@ function renderSubfoldersList() {
 
   dom.folderCount.textContent = state.subfolders.length;
 
+  // Parent Folder item (File System Access mode)
   if (state.parentHandles.length > 0) {
     const backItem = document.createElement('div');
     backItem.className = 'list-item folder-item parent-folder-item';
@@ -510,6 +533,25 @@ function renderSubfoldersList() {
       if (parent) loadDirectoryHandle(parent, false);
     });
     container.appendChild(backItem);
+  }
+
+  // All Files option (Upload mode)
+  if (state.mode === 'upload' && state.subfolders.length > 0) {
+    const allItem = document.createElement('div');
+    allItem.className = 'list-item folder-item' + (!state.currentSubfolderFilter ? ' active-folder' : '');
+
+    const icon = document.createElement('span');
+    icon.className = 'item-icon';
+    icon.textContent = '📁';
+
+    const name = document.createElement('span');
+    name.className = 'item-name';
+    name.textContent = 'All Files';
+
+    allItem.appendChild(icon);
+    allItem.appendChild(name);
+    allItem.addEventListener('click', () => filterUploadSubfolder(null));
+    container.appendChild(allItem);
   }
 
   if (state.subfolders.length === 0 && state.parentHandles.length === 0) {
@@ -804,7 +846,7 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Drag & Drop
+// Drag & Drop Traversal
 ['dragenter', 'dragover'].forEach(eventName => {
   window.addEventListener(eventName, e => {
     e.preventDefault();
@@ -821,12 +863,58 @@ function escapeHtml(str) {
   });
 });
 
-window.addEventListener('drop', e => {
+window.addEventListener('drop', async e => {
   e.preventDefault();
-  if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+  dom.dragOverlay.classList.add('hidden');
+
+  const items = e.dataTransfer.items;
+  if (!items || items.length === 0) return;
+
+  showLoading('Scanning dropped folder tree…');
+  const filesList = [];
+  const entries = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+    if (entry) entries.push(entry);
+  }
+
+  if (entries.length > 0) {
+    for (const entry of entries) {
+      await traverseFileTree(entry, '', filesList);
+    }
+    processFileList(filesList, 'Dropped Folder');
+  } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
     processFileList(e.dataTransfer.files, 'Dropped Files');
+  } else {
+    hideLoading();
   }
 });
+
+async function traverseFileTree(item, path, fileList) {
+  path = path || '';
+  if (item.isFile) {
+    await new Promise(resolve => {
+      item.file(file => {
+        try {
+          Object.defineProperty(file, 'webkitRelativePath', {
+            value: path ? path + file.name : file.name
+          });
+        } catch (_) {}
+        fileList.push(file);
+        resolve();
+      });
+    });
+  } else if (item.isDirectory) {
+    const dirReader = item.createReader();
+    const entries = await new Promise(resolve => {
+      dirReader.readEntries(res => resolve(res));
+    });
+    for (const childEntry of entries) {
+      await traverseFileTree(childEntry, path + item.name + '/', fileList);
+    }
+  }
+}
 
 // Event Listeners
 dom.selectFolderBtn.addEventListener('click', openDirectoryPicker);
