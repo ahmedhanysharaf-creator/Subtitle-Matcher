@@ -27,14 +27,18 @@
     </div>
 
     <div class="folder-action-bar">
-      <button id="select-folder-btn" class="folder-btn primary-folder-btn" title="Select folder directly on your device (Chrome, Edge, Opera)">
-        <span class="btn-icon">📂</span> Select Folder on Disk
+      <button id="select-folder-btn" class="folder-btn primary-folder-btn" title="Select source folder directly on your device (Chrome, Edge, Opera)">
+        <span class="btn-icon">📂</span> Select Source Folder
       </button>
 
       <label for="upload-folder-input" class="folder-btn secondary-folder-btn" title="Upload folder or files from any device/browser">
         <span class="btn-icon">📁</span> Upload Files / Folder
         <input type="file" id="upload-folder-input" webkitdirectory directory multiple class="hidden-input" />
       </label>
+
+      <button id="select-dest-folder-btn" class="folder-btn dest-folder-btn" title="Select destination folder where matched movies & subtitles will be moved">
+        <span class="btn-icon">🎯</span> Select Destination Folder
+      </button>
     </div>
 
     <div class="header-action-group">
@@ -53,7 +57,14 @@
     <div class="mode-info" id="mode-info">
       <span class="mode-tag">Ready</span> Choose a folder or drag & drop subtitle and video files to get started.
     </div>
-    <div id="current-folder-label" class="current-folder-label"></div>
+    <div class="mode-right-group">
+      <div id="dest-folder-badge" class="dest-folder-badge hidden" title="Destination folder for matched movies & subtitles">
+        <span class="dest-icon">🎯</span>
+        <span id="dest-folder-name" class="dest-name">Destination: None</span>
+        <button id="clear-dest-btn" class="clear-dest-btn" title="Clear destination folder (keep files in source directory)">✕</button>
+      </div>
+      <div id="current-folder-label" class="current-folder-label"></div>
+    </div>
   </div>
 
   <!-- ═══════ MAIN PANELS ═══════ -->
@@ -152,6 +163,37 @@
       <div class="no-matches-msg">No matches yet — click ✨ Auto Match or pair subtitles and films manually.</div>
     </div>
   </footer>
+
+  <!-- ═══════ DESTINATION FOLDER MODAL ═══════ -->
+  <div id="dest-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="dest-modal-title">
+    <div class="modal-backdrop" id="dest-modal-backdrop"></div>
+    <div class="modal-box dest-modal-box">
+      <h3 id="dest-modal-title">🎯 Set Destination Folder</h3>
+      <p class="dest-modal-desc">Select or enter a destination folder where matched movies and subtitles will be moved.</p>
+
+      <div class="dest-option-buttons">
+        <button id="dest-browse-disk-btn" class="folder-btn primary-folder-btn full-width-btn">
+          <span class="btn-icon">📂</span> Browse Folder on Disk
+        </button>
+      </div>
+
+      <div class="dest-divider"><span>OR ENTER A DESTINATION PATH / SUBFOLDER</span></div>
+
+      <div class="input-group">
+        <input type="text" id="dest-folder-input" class="dest-input" placeholder="e.g. Matched_Movies or C:\Movies\Matched" />
+      </div>
+
+      <div class="dest-subfolder-suggestions" id="dest-subfolder-suggestions">
+        <span class="suggestion-label">Or choose an existing subfolder:</span>
+        <div id="subfolder-chips" class="subfolder-chips"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="dest-cancel-btn" class="folder-btn">Cancel</button>
+        <button id="dest-save-btn" class="done-btn">Set Destination</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ═══════ RESULTS MODAL ═══════ -->
   <div id="results-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">

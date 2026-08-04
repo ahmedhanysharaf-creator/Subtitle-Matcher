@@ -20,9 +20,11 @@ const state = {
   dirHandle: null,
   parentHandles: [], // stack of parent directory handles for navigation
   folderName: '',
+  destDirHandle: null, // Destination folder directory handle
+  destFolderName: '',  // Destination folder name / path string
   subfolders: [], // [{ name, handle, path }]
-  subtitles: [],  // [{ name, ext, file, handle, path }]
-  videos: [],     // [{ name, ext, file, handle, path }]
+  subtitles: [],  // [{ name, ext, file, handle, path, parentHandle }]
+  videos: [],     // [{ name, ext, file, handle, path, parentHandle }]
   allUploadFiles: [], // For upload mode subfolder filtering
   currentSubfolderFilter: null,
   matches: [],    // [{ id, subtitle, video, number, color }]
@@ -34,35 +36,46 @@ const state = {
 // DOM References
 const $ = id => document.getElementById(id);
 const dom = {
-  selectFolderBtn:   $('select-folder-btn'),
-  uploadFolderInput: $('upload-folder-input'),
-  autoMatchBtn:      $('auto-match-btn'),
-  doneBtn:           $('done-btn'),
-  modeInfo:          $('mode-info'),
-  currentFolderLabel:$('current-folder-label'),
-  mainPanels:        $('main-panels'),
-  dragOverlay:       $('drag-overlay'),
-  subfoldersPanel:   $('subfolders-panel'),
-  subfoldersList:    $('subfolders-list'),
-  folderCount:       $('folder-count'),
-  toggleSidebarBtn:  $('toggle-sidebar-btn'),
-  floatingSidebarBtn:$('floating-sidebar-btn'),
-  subfolderDivider:  $('subfolder-divider'),
-  subtitleList:      $('subtitle-list'),
-  videoList:         $('video-list'),
-  subCount:          $('sub-count'),
-  vidCount:          $('vid-count'),
-  matchesList:       $('matches-list'),
-  matchCount:        $('match-count'),
-  clearBtn:          $('clear-matches-btn'),
-  modal:             $('results-modal'),
-  modalResults:      $('modal-results'),
-  modalActions:      $('modal-actions'),
-  modalClose:        $('modal-close-btn'),
-  modalBackdrop:     $('modal-backdrop'),
-  toast:             $('toast'),
-  loading:           $('loading-overlay'),
-  loadingText:       $('loading-text'),
+  selectFolderBtn:     $('select-folder-btn'),
+  uploadFolderInput:   $('upload-folder-input'),
+  selectDestFolderBtn: $('select-dest-folder-btn'),
+  autoMatchBtn:        $('auto-match-btn'),
+  doneBtn:             $('done-btn'),
+  modeInfo:            $('mode-info'),
+  currentFolderLabel:  $('current-folder-label'),
+  destFolderBadge:     $('dest-folder-badge'),
+  destFolderName:      $('dest-folder-name'),
+  clearDestBtn:        $('clear-dest-btn'),
+  mainPanels:          $('main-panels'),
+  dragOverlay:         $('drag-overlay'),
+  subfoldersPanel:     $('subfolders-panel'),
+  subfoldersList:      $('subfolders-list'),
+  folderCount:         $('folder-count'),
+  toggleSidebarBtn:    $('toggle-sidebar-btn'),
+  floatingSidebarBtn:  $('floating-sidebar-btn'),
+  subfolderDivider:    $('subfolder-divider'),
+  subtitleList:        $('subtitle-list'),
+  videoList:           $('video-list'),
+  subCount:            $('sub-count'),
+  vidCount:            $('vid-count'),
+  matchesList:         $('matches-list'),
+  matchCount:          $('match-count'),
+  clearBtn:            $('clear-matches-btn'),
+  modal:               $('results-modal'),
+  modalResults:        $('modal-results'),
+  modalActions:        $('modal-actions'),
+  modalClose:          $('modal-close-btn'),
+  modalBackdrop:       $('modal-backdrop'),
+  destModal:           $('dest-modal'),
+  destModalBackdrop:   $('dest-modal-backdrop'),
+  destBrowseDiskBtn:   $('dest-browse-disk-btn'),
+  destFolderInput:     $('dest-folder-input'),
+  destSaveBtn:         $('dest-save-btn'),
+  destCancelBtn:       $('dest-cancel-btn'),
+  subfolderChips:      $('subfolder-chips'),
+  toast:               $('toast'),
+  loading:             $('loading-overlay'),
+  loadingText:         $('loading-text'),
 };
 
 // Natural Sort
@@ -112,9 +125,9 @@ async function loadDirectoryHandle(handle, isRoot = false) {
       } else if (isFile || entry.kind === 'file') {
         const ext = getFileExt(entry.name);
         if (SUBTITLE_EXTENSIONS.includes(ext)) {
-          state.subtitles.push({ name: entry.name, ext, handle: entry, path: entry.name });
+          state.subtitles.push({ name: entry.name, ext, handle: entry, path: entry.name, parentHandle: handle });
         } else if (VIDEO_EXTENSIONS.includes(ext)) {
-          state.videos.push({ name: entry.name, ext, handle: entry, path: entry.name });
+          state.videos.push({ name: entry.name, ext, handle: entry, path: entry.name, parentHandle: handle });
         }
       }
     }
@@ -418,16 +431,187 @@ function autoMatch() {
 }
 
 // ─────────────────────────────────────────────────────────
+// Destination Folder Handling
+// ─────────────────────────────────────────────────────────
+async function openDestDirectoryPicker() {
+  if ('showDirectoryPicker' in window) {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      setDestinationFolder(handle, handle.name);
+      showToast(`🎯 Destination set to: ${handle.name}`, 'success');
+      closeDestModal();
+      return;
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        showToast('Could not open destination folder: ' + err.message, 'warning');
+      } else {
+        return;
+      }
+    }
+  }
+
+  // Fallback: Open Destination Modal
+  openDestModal();
+}
+
+function setDestinationFolder(handle, name) {
+  state.destDirHandle = handle || null;
+  state.destFolderName = name || '';
+  updateDestFolderUI();
+}
+
+function clearDestinationFolder() {
+  state.destDirHandle = null;
+  state.destFolderName = '';
+  updateDestFolderUI();
+  showToast('Destination folder cleared (files will stay in source folder)', 'info');
+}
+
+function updateDestFolderUI() {
+  const hasDest = !!(state.destDirHandle || (state.destFolderName && state.destFolderName.trim()));
+  if (hasDest) {
+    if (dom.destFolderBadge) dom.destFolderBadge.classList.remove('hidden');
+    if (dom.destFolderName) dom.destFolderName.textContent = `Dest: ${state.destFolderName}`;
+    if (dom.selectDestFolderBtn) {
+      dom.selectDestFolderBtn.classList.add('active-dest');
+      dom.selectDestFolderBtn.title = `Destination set to: ${state.destFolderName}`;
+    }
+    if (dom.doneBtn) dom.doneBtn.title = `Apply matches and move files to ${state.destFolderName}`;
+  } else {
+    if (dom.destFolderBadge) dom.destFolderBadge.classList.add('hidden');
+    if (dom.destFolderName) dom.destFolderName.textContent = 'Destination: None';
+    if (dom.selectDestFolderBtn) {
+      dom.selectDestFolderBtn.classList.remove('active-dest');
+      dom.selectDestFolderBtn.title = 'Select destination folder where matched movies & subtitles will be moved';
+    }
+    if (dom.doneBtn) dom.doneBtn.title = 'Apply matches and rename subtitles';
+  }
+}
+
+function openDestModal() {
+  if (!dom.destModal) return;
+  if (dom.destFolderInput) dom.destFolderInput.value = state.destFolderName || '';
+
+  if (dom.subfolderChips) {
+    dom.subfolderChips.innerHTML = '';
+    if (state.subfolders && state.subfolders.length > 0) {
+      state.subfolders.forEach(sub => {
+        const chip = document.createElement('button');
+        chip.className = 'subfolder-chip';
+        chip.textContent = sub.name;
+        chip.addEventListener('click', () => {
+          if (dom.destFolderInput) dom.destFolderInput.value = sub.name;
+          if (sub.handle) {
+            setDestinationFolder(sub.handle, sub.name);
+            closeDestModal();
+            showToast(`🎯 Destination set to subfolder: ${sub.name}`, 'success');
+          }
+        });
+        dom.subfolderChips.appendChild(chip);
+      });
+    } else {
+      dom.subfolderChips.innerHTML = '<span class="suggestion-label">No subfolders loaded yet</span>';
+    }
+  }
+
+  dom.destModal.classList.remove('hidden');
+}
+
+function closeDestModal() {
+  if (dom.destModal) dom.destModal.classList.add('hidden');
+}
+
+function saveDestModalInput() {
+  const val = dom.destFolderInput ? dom.destFolderInput.value.trim() : '';
+  if (val) {
+    setDestinationFolder(null, val);
+    showToast(`🎯 Destination set to: ${val}`, 'success');
+  } else {
+    clearDestinationFolder();
+  }
+  closeDestModal();
+}
+
+// ─────────────────────────────────────────────────────────
 // Apply Matches & Renaming Execution
 // ─────────────────────────────────────────────────────────
 async function applyMatches() {
   if (state.matches.length === 0) return;
 
-  showLoading('Processing matches…');
+  const hasDest = !!(state.destDirHandle || (state.destFolderName && state.destFolderName.trim()));
+  const destName = state.destFolderName || 'destination folder';
+
+  showLoading(hasDest ? `Moving movies & subtitles to ${destName}…` : 'Processing matches…');
   const results = [];
 
   try {
-    if (state.mode === 'fs' && state.dirHandle) {
+    if (state.destDirHandle) {
+      // Move both Subtitle AND Video files directly to Destination Handle
+      for (const match of state.matches) {
+        const videoBase = getBaseName(match.video.name);
+        const subExt = match.subtitle.ext;
+        const newSubFileName = videoBase + subExt;
+        const videoFileName = match.video.name;
+
+        try {
+          // 1. Move & Rename Subtitle file to Destination Handle
+          let subFileObj = match.subtitle.file;
+          if (!subFileObj && match.subtitle.handle) subFileObj = await match.subtitle.handle.getFile();
+
+          if (subFileObj) {
+            const destSubHandle = await state.destDirHandle.getFileHandle(newSubFileName, { create: true });
+            const subWritable = await destSubHandle.createWritable();
+            await subWritable.write(subFileObj);
+            await subWritable.close();
+          } else {
+            throw new Error('Subtitle file data unavailable');
+          }
+
+          // 2. Move Video file to Destination Handle
+          let vidFileObj = match.video.file;
+          if (!vidFileObj && match.video.handle) vidFileObj = await match.video.handle.getFile();
+
+          if (vidFileObj) {
+            const destVidHandle = await state.destDirHandle.getFileHandle(videoFileName, { create: true });
+            const vidWritable = await destVidHandle.createWritable();
+            await vidWritable.write(vidFileObj);
+            await vidWritable.close();
+          }
+
+          // 3. Remove original files from source folder if in 'fs' mode and destination is a different directory
+          const sourceSubParent = match.subtitle.parentHandle || state.dirHandle;
+          const sourceVidParent = match.video.parentHandle || state.dirHandle;
+
+          if (state.mode === 'fs' && sourceSubParent && state.destDirHandle !== sourceSubParent) {
+            try { await sourceSubParent.removeEntry(match.subtitle.name); } catch (_) {}
+          }
+          if (state.mode === 'fs' && sourceVidParent && state.destDirHandle !== sourceVidParent) {
+            try { await sourceVidParent.removeEntry(match.video.name); } catch (_) {}
+          }
+
+          results.push({
+            success: true,
+            oldName: match.subtitle.name,
+            newName: `${newSubFileName} & ${videoFileName}`,
+            note: `Moved to ${state.destFolderName}`
+          });
+        } catch (err) {
+          results.push({ success: false, oldName: match.subtitle.name, error: err.message });
+        }
+      }
+
+      hideLoading();
+
+      // Refresh directory view if in fs mode
+      if (state.mode === 'fs' && state.dirHandle) {
+        state.matches = [];
+        state.matchCounter = 0;
+        await loadDirectoryHandle(state.dirHandle, false);
+      }
+
+      showResultsModal(results, 'fs');
+    } else if (state.mode === 'fs' && state.dirHandle) {
+      // In-place rename in source directory
       for (const match of state.matches) {
         const videoBase = getBaseName(match.video.name);
         const subExt = match.subtitle.ext;
@@ -444,11 +628,12 @@ async function applyMatches() {
           } else {
             const file = await match.subtitle.handle.getFile();
             const content = await file.arrayBuffer();
-            const newHandle = await state.dirHandle.getFileHandle(newFileName, { create: true });
+            const sourceParent = match.subtitle.parentHandle || state.dirHandle;
+            const newHandle = await sourceParent.getFileHandle(newFileName, { create: true });
             const writable = await newHandle.createWritable();
             await writable.write(content);
             await writable.close();
-            try { await state.dirHandle.removeEntry(match.subtitle.name); } catch (_) {}
+            try { await sourceParent.removeEntry(match.subtitle.name); } catch (_) {}
           }
 
           results.push({ success: true, oldName: match.subtitle.name, newName: newFileName });
@@ -460,8 +645,10 @@ async function applyMatches() {
       hideLoading();
       showResultsModal(results, 'fs');
     } else {
+      // Upload / Web Mode with ZIP Download
       const zip = typeof JSZip !== 'undefined' ? new JSZip() : null;
       const downloadItems = [];
+      const folderPrefix = state.destFolderName && state.destFolderName.trim() ? state.destFolderName.trim() + '/' : '';
 
       for (const match of state.matches) {
         const videoBase = getBaseName(match.video.name);
@@ -476,10 +663,13 @@ async function applyMatches() {
 
           if (fileObj) {
             if (zip) {
-              zip.file(newFileName, fileObj);
+              zip.file(folderPrefix + newFileName, fileObj);
+              if (match.video.file) {
+                zip.file(folderPrefix + match.video.name, match.video.file);
+              }
             }
-            downloadItems.push({ file: fileObj, newName: newFileName });
-            results.push({ success: true, oldName: match.subtitle.name, newName: newFileName });
+            downloadItems.push({ file: fileObj, newName: folderPrefix + newFileName });
+            results.push({ success: true, oldName: match.subtitle.name, newName: folderPrefix + newFileName });
           } else {
             throw new Error('File data unavailable');
           }
@@ -925,6 +1115,40 @@ dom.uploadFolderInput.addEventListener('change', e => {
   }
 });
 
+if (dom.selectDestFolderBtn) {
+  dom.selectDestFolderBtn.addEventListener('click', openDestDirectoryPicker);
+}
+if (dom.clearDestBtn) {
+  dom.clearDestBtn.addEventListener('click', clearDestinationFolder);
+}
+if (dom.destBrowseDiskBtn) {
+  dom.destBrowseDiskBtn.addEventListener('click', async () => {
+    if ('showDirectoryPicker' in window) {
+      try {
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        setDestinationFolder(handle, handle.name);
+        showToast(`🎯 Destination set to: ${handle.name}`, 'success');
+        closeDestModal();
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          showToast('Could not open destination folder: ' + err.message, 'warning');
+        }
+      }
+    } else {
+      showToast('Disk folder picker is not supported on this browser', 'warning');
+    }
+  });
+}
+if (dom.destSaveBtn) {
+  dom.destSaveBtn.addEventListener('click', saveDestModalInput);
+}
+if (dom.destCancelBtn) {
+  dom.destCancelBtn.addEventListener('click', closeDestModal);
+}
+if (dom.destModalBackdrop) {
+  dom.destModalBackdrop.addEventListener('click', closeDestModal);
+}
+
 if (dom.toggleSidebarBtn) {
   dom.toggleSidebarBtn.addEventListener('click', () => toggleSidebar());
 }
@@ -942,4 +1166,9 @@ dom.clearBtn.addEventListener('click', () => {
 
 dom.modalClose.addEventListener('click', closeModal);
 dom.modalBackdrop.addEventListener('click', closeModal);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal();
+    closeDestModal();
+  }
+});
