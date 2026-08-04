@@ -633,18 +633,29 @@ function showMatchesPreviewModal() {
   dom.modal.classList.remove('hidden');
 }
 
+async function getOrCreateSubdirectoryHandle(rootDirHandle, folderPath) {
+  if (!rootDirHandle || !folderPath) return null;
+  const parts = folderPath.replace(/\\/g, '/').split('/').map(p => p.trim()).filter(Boolean);
+  let currentHandle = rootDirHandle;
+  for (const part of parts) {
+    if (part === '.' || part === '') continue;
+    currentHandle = await currentHandle.getDirectoryHandle(part, { create: true });
+  }
+  return currentHandle;
+}
+
 async function executeMoveOperations() {
   if (state.matches.length === 0) {
     showToast('No matched pairs to process', 'info');
     return;
   }
 
-  // Auto-resolve destination directory handle if user specified a destination folder name
+  // Auto-resolve destination directory handle recursively if user specified a destination folder path/name
   if (!state.destDirHandle && state.destFolderName && state.destFolderName.trim() && state.dirHandle) {
     try {
-      state.destDirHandle = await state.dirHandle.getDirectoryHandle(state.destFolderName.trim(), { create: true });
+      state.destDirHandle = await getOrCreateSubdirectoryHandle(state.dirHandle, state.destFolderName.trim());
     } catch (err) {
-      console.warn('Could not obtain directory handle for destination folder:', err);
+      console.warn('Could not resolve directory handle for destination folder:', err);
     }
   }
 
