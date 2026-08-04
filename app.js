@@ -529,47 +529,67 @@ async function applyMatches() {
 
   try {
     if (state.destDirHandle) {
-      // Move both Subtitle AND Video files directly to Destination Handle
-      for (const match of state.matches) {
+      // Fast atomic move of Subtitle AND Video files directly to Destination Handle
+      for (let i = 0; i < state.matches.length; i++) {
+        const match = state.matches[i];
         const videoBase = getBaseName(match.video.name);
         const subExt = match.subtitle.ext;
         const newSubFileName = videoBase + subExt;
         const videoFileName = match.video.name;
 
+        showLoading(`Moving pair ${i + 1} of ${state.matches.length}: ${videoFileName}…`);
+
         try {
-          // 1. Move & Rename Subtitle file to Destination Handle
-          let subFileObj = match.subtitle.file;
-          if (!subFileObj && match.subtitle.handle) subFileObj = await match.subtitle.handle.getFile();
-
-          if (subFileObj) {
-            const destSubHandle = await state.destDirHandle.getFileHandle(newSubFileName, { create: true });
-            const subWritable = await destSubHandle.createWritable();
-            await subWritable.write(subFileObj);
-            await subWritable.close();
-          } else {
-            throw new Error('Subtitle file data unavailable');
+          // 1. Move & Rename Subtitle File (Try instant atomic handle.move first)
+          let subMoved = false;
+          if (match.subtitle.handle && 'move' in match.subtitle.handle) {
+            try {
+              await match.subtitle.handle.move(state.destDirHandle, newSubFileName);
+              subMoved = true;
+            } catch (_) { /* Fallback to copy if cross-filesystem move */ }
           }
 
-          // 2. Move Video file to Destination Handle
-          let vidFileObj = match.video.file;
-          if (!vidFileObj && match.video.handle) vidFileObj = await match.video.handle.getFile();
+          if (!subMoved) {
+            let subFileObj = match.subtitle.file;
+            if (!subFileObj && match.subtitle.handle) subFileObj = await match.subtitle.handle.getFile();
+            if (subFileObj) {
+              const destSubHandle = await state.destDirHandle.getFileHandle(newSubFileName, { create: true });
+              const subWritable = await destSubHandle.createWritable();
+              await subWritable.write(subFileObj);
+              await subWritable.close();
 
-          if (vidFileObj) {
-            const destVidHandle = await state.destDirHandle.getFileHandle(videoFileName, { create: true });
-            const vidWritable = await destVidHandle.createWritable();
-            await vidWritable.write(vidFileObj);
-            await vidWritable.close();
+              const sourceSubParent = match.subtitle.parentHandle || state.dirHandle;
+              if (state.mode === 'fs' && sourceSubParent && state.destDirHandle !== sourceSubParent) {
+                try { await sourceSubParent.removeEntry(match.subtitle.name); } catch (_) {}
+              }
+            } else {
+              throw new Error('Subtitle file data unavailable');
+            }
           }
 
-          // 3. Remove original files from source folder if in 'fs' mode and destination is a different directory
-          const sourceSubParent = match.subtitle.parentHandle || state.dirHandle;
-          const sourceVidParent = match.video.parentHandle || state.dirHandle;
-
-          if (state.mode === 'fs' && sourceSubParent && state.destDirHandle !== sourceSubParent) {
-            try { await sourceSubParent.removeEntry(match.subtitle.name); } catch (_) {}
+          // 2. Move Video File (Try instant atomic handle.move first)
+          let vidMoved = false;
+          if (match.video.handle && 'move' in match.video.handle) {
+            try {
+              await match.video.handle.move(state.destDirHandle, videoFileName);
+              vidMoved = true;
+            } catch (_) { /* Fallback to copy if cross-filesystem move */ }
           }
-          if (state.mode === 'fs' && sourceVidParent && state.destDirHandle !== sourceVidParent) {
-            try { await sourceVidParent.removeEntry(match.video.name); } catch (_) {}
+
+          if (!vidMoved) {
+            let vidFileObj = match.video.file;
+            if (!vidFileObj && match.video.handle) vidFileObj = await match.video.handle.getFile();
+            if (vidFileObj) {
+              const destVidHandle = await state.destDirHandle.getFileHandle(videoFileName, { create: true });
+              const vidWritable = await destVidHandle.createWritable();
+              await vidWritable.write(vidFileObj);
+              await vidWritable.close();
+
+              const sourceVidParent = match.video.parentHandle || state.dirHandle;
+              if (state.mode === 'fs' && sourceVidParent && state.destDirHandle !== sourceVidParent) {
+                try { await sourceVidParent.removeEntry(match.video.name); } catch (_) {}
+              }
+            }
           }
 
           results.push({
