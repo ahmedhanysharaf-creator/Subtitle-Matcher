@@ -77,6 +77,8 @@ const dom = {
   modalResults:          $('modal-results'),
   modalActions:          $('modal-actions'),
   modalClose:            $('modal-close-btn'),
+  modalCancel:           $('modal-cancel-btn'),
+  modalSubtitle:         $('modal-subtitle'),
   modalBackdrop:         $('modal-backdrop'),
   destModal:             $('dest-modal'),
   destModalBackdrop:     $('dest-modal-backdrop'),
@@ -558,9 +560,66 @@ async function removeSourceFile(item) {
 }
 
 // ─────────────────────────────────────────────────────────
-// Apply Matches & Renaming Execution
+// Apply Matches Workflow (Preview Modal -> Done -> Loading & Move)
 // ─────────────────────────────────────────────────────────
-async function applyMatches() {
+function applyMatches() {
+  if (state.matches.length === 0) {
+    showToast('No matched pairs to apply', 'info');
+    return;
+  }
+  showMatchesPreviewModal();
+}
+
+function showMatchesPreviewModal() {
+  dom.modalResults.innerHTML = '';
+
+  const destName = state.destFolderName || 'Source Folder (In-place)';
+
+  if (dom.modalSubtitle) {
+    dom.modalSubtitle.textContent = `Review matched pairs below. Click "Done" to move files to: ${destName}`;
+  }
+
+  const banner = document.createElement('div');
+  banner.className = 'result-dest-banner';
+  banner.style.marginBottom = '12px';
+  banner.style.padding = '8px 12px';
+  banner.style.borderRadius = 'var(--radius-md)';
+  banner.style.background = 'rgba(6, 182, 212, 0.12)';
+  banner.style.border = '1px solid rgba(6, 182, 212, 0.3)';
+  banner.style.fontSize = '12px';
+  banner.style.color = '#7dd3fc';
+  banner.innerHTML = `🎯 Target Location: <strong>${escapeHtml(destName)}</strong> (${state.matches.length} pair${state.matches.length !== 1 ? 's' : ''})`;
+  dom.modalResults.appendChild(banner);
+
+  state.matches.forEach(match => {
+    const videoBase = getBaseName(match.video.name);
+    const subExt = match.subtitle.ext;
+    const newSubFileName = videoBase + subExt;
+
+    const row = document.createElement('div');
+    row.className = 'result-row success';
+
+    const icon = document.createElement('span');
+    icon.className = 'result-icon';
+    icon.textContent = '📄';
+
+    const text = document.createElement('div');
+    text.className = 'result-text';
+    text.innerHTML = `
+      <div class="result-label" style="font-size:12px;">${escapeHtml(match.subtitle.name)} <span style="color:#06b6d4;font-weight:700;">➔</span> <strong>${escapeHtml(newSubFileName)}</strong></div>
+      <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">🎬 Film: ${escapeHtml(match.video.name)}</div>
+    `;
+
+    row.appendChild(icon);
+    row.appendChild(text);
+    dom.modalResults.appendChild(row);
+  });
+
+  if (dom.modalClose) dom.modalClose.textContent = 'Done';
+  dom.modal.classList.remove('hidden');
+}
+
+async function executeMoveOperations() {
   if (state.matches.length === 0) return;
 
   const hasDest = !!(state.destDirHandle || (state.destFolderName && state.destFolderName.trim()));
@@ -654,13 +713,17 @@ async function applyMatches() {
         await loadDirectoryHandle(state.dirHandle, false);
       }
 
-      showResultsModal(results, 'fs');
+      const successCount = results.filter(r => r.success).length;
+      showToast(`✅ Successfully moved & renamed ${successCount} pair(s) to ${destName}!`, 'success');
     } else if (state.mode === 'fs' && state.dirHandle) {
       // In-place rename in source directory
-      for (const match of state.matches) {
+      for (let i = 0; i < state.matches.length; i++) {
+        const match = state.matches[i];
         const videoBase = getBaseName(match.video.name);
         const subExt = match.subtitle.ext;
         const newFileName = videoBase + subExt;
+
+        showLoading(`Renaming subtitle ${i + 1} of ${state.matches.length}: ${newFileName}…`);
 
         try {
           if (match.subtitle.name === newFileName) {
@@ -696,17 +759,28 @@ async function applyMatches() {
       }
 
       hideLoading();
-      showResultsModal(results, 'fs');
+
+      if (state.dirHandle) {
+        state.matches = [];
+        state.matchCounter = 0;
+        await loadDirectoryHandle(state.dirHandle, false);
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      showToast(`✅ Successfully renamed ${successCount} subtitle file(s)!`, 'success');
     } else {
       // Upload / Web Mode with ZIP Download
       const zip = typeof JSZip !== 'undefined' ? new JSZip() : null;
       const downloadItems = [];
       const folderPrefix = state.destFolderName && state.destFolderName.trim() ? state.destFolderName.trim() + '/' : '';
 
-      for (const match of state.matches) {
+      for (let i = 0; i < state.matches.length; i++) {
+        const match = state.matches[i];
         const videoBase = getBaseName(match.video.name);
         const subExt = match.subtitle.ext;
         const newFileName = videoBase + subExt;
+
+        showLoading(`Preparing file ${i + 1} of ${state.matches.length}…`);
 
         try {
           let fileObj = match.subtitle.file;
@@ -741,7 +815,19 @@ async function applyMatches() {
       }
 
       hideLoading();
-      showResultsModal(results, 'download', { zip, downloadItems });
+
+      if (zip) {
+        showLoading('Generating ZIP package…');
+        const blob = await zip.generateAsync({ type: 'blob' });
+        triggerDownload(blob, 'renamed_subtitles.zip');
+        hideLoading();
+        showToast('📦 Downloaded renamed files package!', 'success');
+      }
+
+      state.matches = [];
+      state.matchCounter = 0;
+      renderAll();
+      updateDoneButton();
     }
   } catch (err) {
     hideLoading();
@@ -1444,7 +1530,13 @@ if (dom.editHistoryBackdrop) {
   dom.editHistoryBackdrop.addEventListener('click', closeEditHistoryModal);
 }
 
-dom.modalClose.addEventListener('click', closeModal);
+dom.modalClose.addEventListener('click', async () => {
+  closeModal();
+  await executeMoveOperations();
+});
+if (dom.modalCancel) {
+  dom.modalCancel.addEventListener('click', closeModal);
+}
 dom.modalBackdrop.addEventListener('click', closeModal);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {

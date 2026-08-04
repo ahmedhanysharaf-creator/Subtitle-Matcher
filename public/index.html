@@ -261,13 +261,15 @@
     </div>
   </div>
 
-  <!-- ═══════ RESULTS MODAL ═══════ -->
+  <!-- ═══════ PREVIEW & CONFIRM MODAL ═══════ -->
   <div id="results-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-backdrop" id="modal-backdrop"></div>
     <div class="modal-box">
-      <h3 id="modal-title">Rename & Export Results</h3>
+      <h3 id="modal-title">🎬 Matched Pairs Ready to Process</h3>
+      <p id="modal-subtitle" class="history-subtitle">Review matched pairs below. Click "Done" to move files to destination folder.</p>
       <div class="modal-results" id="modal-results"></div>
       <div class="modal-actions" id="modal-actions">
+        <button id="modal-cancel-btn" class="folder-btn">Cancel</button>
         <button id="modal-close-btn" class="done-btn">Done</button>
       </div>
     </div>
@@ -282,6 +284,6 @@
     <p id="loading-text">Processing files…</p>
   </div>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
