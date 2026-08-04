@@ -42,6 +42,11 @@
     </div>
 
     <div class="header-action-group">
+      <button id="history-btn" class="history-btn" title="View & edit past match and rename history log">
+        <span class="btn-icon">📜</span> History
+        <span id="history-count-badge" class="history-count-badge">0</span>
+      </button>
+
       <button id="auto-match-btn" class="auto-match-btn" title="Automatically match subtitles to movies by episode or number sequence">
         <span class="sparkle-icon">✨</span> Auto Match
       </button>
@@ -191,6 +196,67 @@
       <div class="modal-actions">
         <button id="dest-cancel-btn" class="folder-btn">Cancel</button>
         <button id="dest-save-btn" class="done-btn">Set Destination</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ HISTORY LOG MODAL ═══════ -->
+  <div id="history-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
+    <div class="modal-backdrop" id="history-modal-backdrop"></div>
+    <div class="modal-box history-modal-box">
+      <div class="history-modal-header">
+        <h3 id="history-modal-title">📜 Action & Match History</h3>
+        <p class="history-subtitle">Track, review, search, edit, or export all past subtitle renames and file moves.</p>
+      </div>
+
+      <div class="history-toolbar">
+        <input type="text" id="history-search-input" class="history-search-input" placeholder="🔍 Search history by film or subtitle name…" />
+        <div class="history-actions-right">
+          <button id="export-history-btn" class="history-action-btn" title="Download history log as JSON file">📥 Export Log</button>
+          <button id="clear-history-btn" class="history-action-btn danger-action" title="Clear all history entries">🗑️ Clear All</button>
+        </div>
+      </div>
+
+      <div class="history-list" id="history-list">
+        <!-- History entries rendered here dynamically -->
+      </div>
+
+      <div class="modal-actions">
+        <button id="history-close-btn" class="done-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ EDIT HISTORY RECORD MODAL ═══════ -->
+  <div id="edit-history-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="edit-history-title">
+    <div class="modal-backdrop" id="edit-history-backdrop"></div>
+    <div class="modal-box edit-history-box">
+      <h3 id="edit-history-title">✏️ Edit History Record</h3>
+      <p class="history-subtitle">Modify entry details to correct mistaken match names or update notes.</p>
+      
+      <div class="input-group">
+        <label class="input-label" for="edit-sub-original">Original Subtitle Name:</label>
+        <input type="text" id="edit-sub-original" class="dest-input" />
+      </div>
+
+      <div class="input-group">
+        <label class="input-label" for="edit-vid-name">Movie Filename:</label>
+        <input type="text" id="edit-vid-name" class="dest-input" />
+      </div>
+
+      <div class="input-group">
+        <label class="input-label" for="edit-sub-new">Renamed Subtitle Name:</label>
+        <input type="text" id="edit-sub-new" class="dest-input" />
+      </div>
+
+      <div class="input-group">
+        <label class="input-label" for="edit-dest-folder">Destination Folder / Location:</label>
+        <input type="text" id="edit-dest-folder" class="dest-input" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="edit-history-cancel-btn" class="folder-btn">Cancel</button>
+        <button id="edit-history-save-btn" class="done-btn">Save Changes</button>
       </div>
     </div>
   </div>

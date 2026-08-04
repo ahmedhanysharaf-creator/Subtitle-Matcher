@@ -31,51 +31,78 @@ const state = {
   pendingItem: null,
   matchCounter: 0,
   sidebarCollapsed: false,
+  history: loadHistoryFromStorage(),
 };
+
+function loadHistoryFromStorage() {
+  try {
+    const raw = localStorage.getItem('subtitle_matcher_history');
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) {
+    return [];
+  }
+}
 
 // DOM References
 const $ = id => document.getElementById(id);
 const dom = {
-  selectFolderBtn:     $('select-folder-btn'),
-  uploadFolderInput:   $('upload-folder-input'),
-  selectDestFolderBtn: $('select-dest-folder-btn'),
-  autoMatchBtn:        $('auto-match-btn'),
-  doneBtn:             $('done-btn'),
-  modeInfo:            $('mode-info'),
-  currentFolderLabel:  $('current-folder-label'),
-  destFolderBadge:     $('dest-folder-badge'),
-  destFolderName:      $('dest-folder-name'),
-  clearDestBtn:        $('clear-dest-btn'),
-  mainPanels:          $('main-panels'),
-  dragOverlay:         $('drag-overlay'),
-  subfoldersPanel:     $('subfolders-panel'),
-  subfoldersList:      $('subfolders-list'),
-  folderCount:         $('folder-count'),
-  toggleSidebarBtn:    $('toggle-sidebar-btn'),
-  floatingSidebarBtn:  $('floating-sidebar-btn'),
-  subfolderDivider:    $('subfolder-divider'),
-  subtitleList:        $('subtitle-list'),
-  videoList:           $('video-list'),
-  subCount:            $('sub-count'),
-  vidCount:            $('vid-count'),
-  matchesList:         $('matches-list'),
-  matchCount:          $('match-count'),
-  clearBtn:            $('clear-matches-btn'),
-  modal:               $('results-modal'),
-  modalResults:        $('modal-results'),
-  modalActions:        $('modal-actions'),
-  modalClose:          $('modal-close-btn'),
-  modalBackdrop:       $('modal-backdrop'),
-  destModal:           $('dest-modal'),
-  destModalBackdrop:   $('dest-modal-backdrop'),
-  destBrowseDiskBtn:   $('dest-browse-disk-btn'),
-  destFolderInput:     $('dest-folder-input'),
-  destSaveBtn:         $('dest-save-btn'),
-  destCancelBtn:       $('dest-cancel-btn'),
-  subfolderChips:      $('subfolder-chips'),
-  toast:               $('toast'),
-  loading:             $('loading-overlay'),
-  loadingText:         $('loading-text'),
+  selectFolderBtn:       $('select-folder-btn'),
+  uploadFolderInput:     $('upload-folder-input'),
+  selectDestFolderBtn:   $('select-dest-folder-btn'),
+  historyBtn:            $('history-btn'),
+  historyCountBadge:     $('history-count-badge'),
+  autoMatchBtn:          $('auto-match-btn'),
+  doneBtn:               $('done-btn'),
+  modeInfo:              $('mode-info'),
+  currentFolderLabel:    $('current-folder-label'),
+  destFolderBadge:       $('dest-folder-badge'),
+  destFolderName:        $('dest-folder-name'),
+  clearDestBtn:          $('clear-dest-btn'),
+  mainPanels:            $('main-panels'),
+  dragOverlay:           $('drag-overlay'),
+  subfoldersPanel:       $('subfolders-panel'),
+  subfoldersList:        $('subfolders-list'),
+  folderCount:           $('folder-count'),
+  toggleSidebarBtn:      $('toggle-sidebar-btn'),
+  floatingSidebarBtn:    $('floating-sidebar-btn'),
+  subfolderDivider:      $('subfolder-divider'),
+  subtitleList:          $('subtitle-list'),
+  videoList:             $('video-list'),
+  subCount:              $('sub-count'),
+  vidCount:              $('vid-count'),
+  matchesList:           $('matches-list'),
+  matchCount:            $('match-count'),
+  clearBtn:              $('clear-matches-btn'),
+  modal:                 $('results-modal'),
+  modalResults:          $('modal-results'),
+  modalActions:          $('modal-actions'),
+  modalClose:            $('modal-close-btn'),
+  modalBackdrop:         $('modal-backdrop'),
+  destModal:             $('dest-modal'),
+  destModalBackdrop:     $('dest-modal-backdrop'),
+  destBrowseDiskBtn:     $('dest-browse-disk-btn'),
+  destFolderInput:       $('dest-folder-input'),
+  destSaveBtn:           $('dest-save-btn'),
+  destCancelBtn:         $('dest-cancel-btn'),
+  subfolderChips:        $('subfolder-chips'),
+  historyModal:          $('history-modal'),
+  historyModalBackdrop:  $('history-modal-backdrop'),
+  historySearchInput:    $('history-search-input'),
+  exportHistoryBtn:      $('export-history-btn'),
+  clearHistoryBtn:       $('clear-history-btn'),
+  historyList:           $('history-list'),
+  historyCloseBtn:       $('history-close-btn'),
+  editHistoryModal:      $('edit-history-modal'),
+  editHistoryBackdrop:   $('edit-history-backdrop'),
+  editSubOriginal:       $('edit-sub-original'),
+  editVidName:           $('edit-vid-name'),
+  editSubNew:            $('edit-sub-new'),
+  editDestFolder:        $('edit-dest-folder'),
+  editHistoryCancelBtn:  $('edit-history-cancel-btn'),
+  editHistorySaveBtn:    $('edit-history-save-btn'),
+  toast:                 $('toast'),
+  loading:               $('loading-overlay'),
+  loadingText:           $('loading-text'),
 };
 
 // Natural Sort
@@ -599,6 +626,14 @@ async function applyMatches() {
             }
           }
 
+          addHistoryRecord({
+            originalSub: match.subtitle.name,
+            originalVid: match.video.name,
+            newSub: newSubFileName,
+            destFolder: state.destFolderName || 'Destination Folder',
+            status: 'Success'
+          });
+
           results.push({
             success: true,
             oldName: match.subtitle.name,
@@ -646,6 +681,14 @@ async function applyMatches() {
             try { await sourceParent.removeEntry(match.subtitle.name); } catch (_) {}
           }
 
+          addHistoryRecord({
+            originalSub: match.subtitle.name,
+            originalVid: match.video.name,
+            newSub: newFileName,
+            destFolder: 'Source Folder (In-place)',
+            status: 'Success'
+          });
+
           results.push({ success: true, oldName: match.subtitle.name, newName: newFileName });
         } catch (err) {
           results.push({ success: false, oldName: match.subtitle.name, error: err.message });
@@ -679,6 +722,15 @@ async function applyMatches() {
               }
             }
             downloadItems.push({ file: fileObj, newName: folderPrefix + newFileName });
+
+            addHistoryRecord({
+              originalSub: match.subtitle.name,
+              originalVid: match.video.name,
+              newSub: folderPrefix + newFileName,
+              destFolder: state.destFolderName || 'ZIP Download',
+              status: 'Success'
+            });
+
             results.push({ success: true, oldName: match.subtitle.name, newName: folderPrefix + newFileName });
           } else {
             throw new Error('File data unavailable');
@@ -695,6 +747,192 @@ async function applyMatches() {
     hideLoading();
     showToast('❌ Execution failed: ' + err.message, 'error');
   }
+}
+
+// ─────────────────────────────────────────────────────────
+// Action & Rename History System
+// ─────────────────────────────────────────────────────────
+let editingHistoryId = null;
+
+function saveHistoryToStorage() {
+  try {
+    localStorage.setItem('subtitle_matcher_history', JSON.stringify(state.history));
+  } catch (_) {}
+  updateHistoryBadge();
+}
+
+function addHistoryRecord(record) {
+  const item = {
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toLocaleString(),
+    originalSub: record.originalSub,
+    originalVid: record.originalVid,
+    newSub: record.newSub,
+    destFolder: record.destFolder || (state.destFolderName ? state.destFolderName : 'Source Folder'),
+    status: record.status || 'Success'
+  };
+
+  state.history.unshift(item);
+  saveHistoryToStorage();
+}
+
+function updateHistoryBadge() {
+  if (dom.historyCountBadge) {
+    dom.historyCountBadge.textContent = state.history.length;
+  }
+}
+
+function openHistoryModal() {
+  if (!dom.historyModal) return;
+  renderHistoryList();
+  dom.historyModal.classList.remove('hidden');
+}
+
+function closeHistoryModal() {
+  if (dom.historyModal) dom.historyModal.classList.add('hidden');
+}
+
+function renderHistoryList(filterText = '') {
+  if (!dom.historyList) return;
+  dom.historyList.innerHTML = '';
+
+  const cleanFilter = filterText.toLowerCase().trim();
+  const filtered = state.history.filter(h => {
+    if (!cleanFilter) return true;
+    return (
+      (h.originalSub && h.originalSub.toLowerCase().includes(cleanFilter)) ||
+      (h.originalVid && h.originalVid.toLowerCase().includes(cleanFilter)) ||
+      (h.newSub && h.newSub.toLowerCase().includes(cleanFilter)) ||
+      (h.destFolder && h.destFolder.toLowerCase().includes(cleanFilter))
+    );
+  });
+
+  if (filtered.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = `<div class="splash-icon">📜</div><p>${cleanFilter ? 'No matching history entries found' : 'No history recorded yet. Matches will appear here after you click Apply Matches.'}</p>`;
+    dom.historyList.appendChild(empty);
+    return;
+  }
+
+  filtered.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'history-card';
+
+    const header = document.createElement('div');
+    header.className = 'history-card-header';
+    
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'history-time';
+    timeSpan.textContent = `⏱️ ${item.timestamp}`;
+
+    const destTag = document.createElement('span');
+    destTag.className = 'history-dest-tag';
+    destTag.textContent = `🎯 ${item.destFolder}`;
+
+    header.appendChild(timeSpan);
+    header.appendChild(destTag);
+
+    const body = document.createElement('div');
+    body.className = 'history-card-body';
+
+    body.innerHTML = `
+      <div class="history-row-item">
+        <span class="history-label">Subtitle:</span>
+        <span class="history-val">${escapeHtml(item.originalSub)} <span class="history-arrow">➔</span> ${escapeHtml(item.newSub)}</span>
+      </div>
+      <div class="history-row-item">
+        <span class="history-label">Film / Episode:</span>
+        <span class="history-val">🎬 ${escapeHtml(item.originalVid)}</span>
+      </div>
+    `;
+
+    const actions = document.createElement('div');
+    actions.className = 'history-card-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'hist-btn edit-hist-btn';
+    editBtn.innerHTML = '✏️ Edit Record';
+    editBtn.addEventListener('click', () => openEditHistoryModal(item.id));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'hist-btn delete-hist-btn';
+    deleteBtn.innerHTML = '🗑️ Delete';
+    deleteBtn.addEventListener('click', () => deleteHistoryRecord(item.id));
+
+    actions.appendChild(editBtn);
+    actions.appendChild(deleteBtn);
+
+    card.appendChild(header);
+    card.appendChild(body);
+    card.appendChild(actions);
+
+    dom.historyList.appendChild(card);
+  });
+}
+
+function openEditHistoryModal(id) {
+  const record = state.history.find(h => h.id === id);
+  if (!record) return;
+
+  editingHistoryId = id;
+  dom.editSubOriginal.value = record.originalSub || '';
+  dom.editVidName.value = record.originalVid || '';
+  dom.editSubNew.value = record.newSub || '';
+  dom.editDestFolder.value = record.destFolder || '';
+
+  dom.editHistoryModal.classList.remove('hidden');
+}
+
+function closeEditHistoryModal() {
+  editingHistoryId = null;
+  if (dom.editHistoryModal) dom.editHistoryModal.classList.add('hidden');
+}
+
+function saveEditHistoryModal() {
+  if (!editingHistoryId) return;
+  const record = state.history.find(h => h.id === editingHistoryId);
+  if (record) {
+    record.originalSub = dom.editSubOriginal.value.trim() || record.originalSub;
+    record.originalVid = dom.editVidName.value.trim() || record.originalVid;
+    record.newSub = dom.editSubNew.value.trim() || record.newSub;
+    record.destFolder = dom.editDestFolder.value.trim() || record.destFolder;
+
+    saveHistoryToStorage();
+    renderHistoryList(dom.historySearchInput ? dom.historySearchInput.value : '');
+    showToast('✏️ History entry updated successfully', 'success');
+  }
+  closeEditHistoryModal();
+}
+
+function deleteHistoryRecord(id) {
+  const idx = state.history.findIndex(h => h.id === id);
+  if (idx !== -1) {
+    state.history.splice(idx, 1);
+    saveHistoryToStorage();
+    renderHistoryList(dom.historySearchInput ? dom.historySearchInput.value : '');
+    showToast('Deleted history entry', 'info');
+  }
+}
+
+function clearAllHistory() {
+  if (state.history.length === 0) return;
+  state.history = [];
+  saveHistoryToStorage();
+  renderHistoryList();
+  showToast('All history cleared', 'info');
+}
+
+function exportHistoryLog() {
+  if (state.history.length === 0) {
+    showToast('No history available to export', 'warning');
+    return;
+  }
+
+  const jsonStr = JSON.stringify(state.history, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  triggerDownload(blob, `subtitle_matcher_history_${Date.now()}.json`);
+  showToast('📥 History log exported successfully', 'success');
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1174,11 +1412,48 @@ dom.clearBtn.addEventListener('click', () => {
   showToast('All matches cleared');
 });
 
+if (dom.historyBtn) {
+  dom.historyBtn.addEventListener('click', openHistoryModal);
+}
+if (dom.historyCloseBtn) {
+  dom.historyCloseBtn.addEventListener('click', closeHistoryModal);
+}
+if (dom.historyModalBackdrop) {
+  dom.historyModalBackdrop.addEventListener('click', closeHistoryModal);
+}
+if (dom.historySearchInput) {
+  dom.historySearchInput.addEventListener('input', e => renderHistoryList(e.target.value));
+}
+if (dom.exportHistoryBtn) {
+  dom.exportHistoryBtn.addEventListener('click', exportHistoryLog);
+}
+if (dom.clearHistoryBtn) {
+  dom.clearHistoryBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear all history records?')) {
+      clearAllHistory();
+    }
+  });
+}
+if (dom.editHistorySaveBtn) {
+  dom.editHistorySaveBtn.addEventListener('click', saveEditHistoryModal);
+}
+if (dom.editHistoryCancelBtn) {
+  dom.editHistoryCancelBtn.addEventListener('click', closeEditHistoryModal);
+}
+if (dom.editHistoryBackdrop) {
+  dom.editHistoryBackdrop.addEventListener('click', closeEditHistoryModal);
+}
+
 dom.modalClose.addEventListener('click', closeModal);
 dom.modalBackdrop.addEventListener('click', closeModal);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeModal();
     closeDestModal();
+    closeHistoryModal();
+    closeEditHistoryModal();
   }
 });
+
+// Initialize history badge count on startup
+updateHistoryBadge();
