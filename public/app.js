@@ -545,16 +545,30 @@ function saveDestModalInput() {
 }
 
 async function removeSourceFile(item) {
-  if (state.mode !== 'fs') return;
-  const parents = [item.parentHandle, state.dirHandle].filter(Boolean);
-  for (const parent of parents) {
-    if (state.destDirHandle && state.destDirHandle === parent) {
-      continue;
-    }
+  if (state.mode !== 'fs') return false;
+  const candidateParents = [item.parentHandle, state.dirHandle].filter(Boolean);
+
+  for (const parent of candidateParents) {
     try {
+      if (state.destDirHandle) {
+        try {
+          if (await state.destDirHandle.isSameEntry(parent)) continue;
+        } catch (_) {}
+      }
       await parent.removeEntry(item.name);
       return true;
     } catch (_) {}
+  }
+
+  // Lock release retry loop for Windows OS file handle delays
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await new Promise(r => setTimeout(r, 120 * attempt));
+    for (const parent of candidateParents) {
+      try {
+        await parent.removeEntry(item.name);
+        return true;
+      } catch (_) {}
+    }
   }
   return false;
 }
@@ -653,30 +667,52 @@ async function executeMoveOperations() {
         showLoading(`Moving pair ${i + 1} of ${state.matches.length}: ${videoFileName}…`);
 
         try {
-          // 1. Move/Write Subtitle File
-          let subFileObj = match.subtitle.file;
-          if (!subFileObj && match.subtitle.handle) subFileObj = await match.subtitle.handle.getFile();
-
-          if (subFileObj) {
-            const destSubHandle = await state.destDirHandle.getFileHandle(newSubFileName, { create: true });
-            const subWritable = await destSubHandle.createWritable();
-            await subWritable.write(subFileObj);
-            await subWritable.close();
-            await removeSourceFile(match.subtitle);
-          } else {
-            throw new Error('Subtitle file data unavailable');
+          // 1. Move & Rename Subtitle File
+          let subMoved = false;
+          if (match.subtitle.handle && typeof match.subtitle.handle.move === 'function') {
+            try {
+              await match.subtitle.handle.move(state.destDirHandle, newSubFileName);
+              subMoved = true;
+            } catch (_) {}
           }
 
-          // 2. Move/Write Video File
-          let vidFileObj = match.video.file;
-          if (!vidFileObj && match.video.handle) vidFileObj = await match.video.handle.getFile();
+          if (!subMoved) {
+            let subFileObj = match.subtitle.file;
+            if (!subFileObj && match.subtitle.handle) subFileObj = await match.subtitle.handle.getFile();
 
-          if (vidFileObj) {
-            const destVidHandle = await state.destDirHandle.getFileHandle(videoFileName, { create: true });
-            const vidWritable = await destVidHandle.createWritable();
-            await vidWritable.write(vidFileObj);
-            await vidWritable.close();
-            await removeSourceFile(match.video);
+            if (subFileObj) {
+              const destSubHandle = await state.destDirHandle.getFileHandle(newSubFileName, { create: true });
+              const subWritable = await destSubHandle.createWritable();
+              await subWritable.write(subFileObj);
+              await subWritable.close();
+              subFileObj = null;
+              await removeSourceFile(match.subtitle);
+            } else {
+              throw new Error('Subtitle file data unavailable');
+            }
+          }
+
+          // 2. Move Video File
+          let vidMoved = false;
+          if (match.video.handle && typeof match.video.handle.move === 'function') {
+            try {
+              await match.video.handle.move(state.destDirHandle, videoFileName);
+              vidMoved = true;
+            } catch (_) {}
+          }
+
+          if (!vidMoved) {
+            let vidFileObj = match.video.file;
+            if (!vidFileObj && match.video.handle) vidFileObj = await match.video.handle.getFile();
+
+            if (vidFileObj) {
+              const destVidHandle = await state.destDirHandle.getFileHandle(videoFileName, { create: true });
+              const vidWritable = await destVidHandle.createWritable();
+              await vidWritable.write(vidFileObj);
+              await vidWritable.close();
+              vidFileObj = null;
+              await removeSourceFile(match.video);
+            }
           }
 
           addHistoryRecord({
