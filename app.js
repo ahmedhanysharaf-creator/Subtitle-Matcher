@@ -620,9 +620,21 @@ function showMatchesPreviewModal() {
 }
 
 async function executeMoveOperations() {
-  if (state.matches.length === 0) return;
+  if (state.matches.length === 0) {
+    showToast('No matched pairs to process', 'info');
+    return;
+  }
 
-  const hasDest = !!(state.destDirHandle || (state.destFolderName && state.destFolderName.trim()));
+  // Auto-resolve destination directory handle if user specified a destination folder name
+  if (!state.destDirHandle && state.destFolderName && state.destFolderName.trim() && state.dirHandle) {
+    try {
+      state.destDirHandle = await state.dirHandle.getDirectoryHandle(state.destFolderName.trim(), { create: true });
+    } catch (err) {
+      console.warn('Could not obtain directory handle for destination folder:', err);
+    }
+  }
+
+  const hasDest = !!state.destDirHandle;
   const destName = state.destFolderName || 'destination folder';
 
   showLoading(hasDest ? `Moving movies & subtitles to ${destName}…` : 'Processing matches…');
@@ -630,7 +642,7 @@ async function executeMoveOperations() {
 
   try {
     if (state.destDirHandle) {
-      // Fast atomic move of Subtitle AND Video files directly to Destination Handle
+      // Move BOTH Subtitle AND Video files directly to Destination Handle
       for (let i = 0; i < state.matches.length; i++) {
         const match = state.matches[i];
         const videoBase = getBaseName(match.video.name);
@@ -641,48 +653,30 @@ async function executeMoveOperations() {
         showLoading(`Moving pair ${i + 1} of ${state.matches.length}: ${videoFileName}…`);
 
         try {
-          // 1. Move & Rename Subtitle File
-          let subMoved = false;
-          if (match.subtitle.handle && 'move' in match.subtitle.handle) {
-            try {
-              await match.subtitle.handle.move(state.destDirHandle, newSubFileName);
-              subMoved = true;
-            } catch (_) { /* Fallback if cross-filesystem move */ }
+          // 1. Move/Write Subtitle File
+          let subFileObj = match.subtitle.file;
+          if (!subFileObj && match.subtitle.handle) subFileObj = await match.subtitle.handle.getFile();
+
+          if (subFileObj) {
+            const destSubHandle = await state.destDirHandle.getFileHandle(newSubFileName, { create: true });
+            const subWritable = await destSubHandle.createWritable();
+            await subWritable.write(subFileObj);
+            await subWritable.close();
+            await removeSourceFile(match.subtitle);
+          } else {
+            throw new Error('Subtitle file data unavailable');
           }
 
-          if (!subMoved) {
-            let subFileObj = match.subtitle.file;
-            if (!subFileObj && match.subtitle.handle) subFileObj = await match.subtitle.handle.getFile();
-            if (subFileObj) {
-              const destSubHandle = await state.destDirHandle.getFileHandle(newSubFileName, { create: true });
-              const subWritable = await destSubHandle.createWritable();
-              await subWritable.write(subFileObj);
-              await subWritable.close();
-              await removeSourceFile(match.subtitle);
-            } else {
-              throw new Error('Subtitle file data unavailable');
-            }
-          }
+          // 2. Move/Write Video File
+          let vidFileObj = match.video.file;
+          if (!vidFileObj && match.video.handle) vidFileObj = await match.video.handle.getFile();
 
-          // 2. Move Video File
-          let vidMoved = false;
-          if (match.video.handle && 'move' in match.video.handle) {
-            try {
-              await match.video.handle.move(state.destDirHandle, videoFileName);
-              vidMoved = true;
-            } catch (_) { /* Fallback if cross-filesystem move */ }
-          }
-
-          if (!vidMoved) {
-            let vidFileObj = match.video.file;
-            if (!vidFileObj && match.video.handle) vidFileObj = await match.video.handle.getFile();
-            if (vidFileObj) {
-              const destVidHandle = await state.destDirHandle.getFileHandle(videoFileName, { create: true });
-              const vidWritable = await destVidHandle.createWritable();
-              await vidWritable.write(vidFileObj);
-              await vidWritable.close();
-              await removeSourceFile(match.video);
-            }
+          if (vidFileObj) {
+            const destVidHandle = await state.destDirHandle.getFileHandle(videoFileName, { create: true });
+            const vidWritable = await destVidHandle.createWritable();
+            await vidWritable.write(vidFileObj);
+            await vidWritable.close();
+            await removeSourceFile(match.video);
           }
 
           addHistoryRecord({
@@ -697,7 +691,7 @@ async function executeMoveOperations() {
             success: true,
             oldName: match.subtitle.name,
             newName: `${newSubFileName} & ${videoFileName}`,
-            note: `Moved to ${state.destFolderName}`
+            note: `Moved to ${destName}`
           });
         } catch (err) {
           results.push({ success: false, oldName: match.subtitle.name, error: err.message });
@@ -706,10 +700,12 @@ async function executeMoveOperations() {
 
       hideLoading();
 
-      // Refresh directory view if in fs mode
+      state.matches = [];
+      state.matchCounter = 0;
+      renderAll();
+      updateDoneButton();
+
       if (state.mode === 'fs' && state.dirHandle) {
-        state.matches = [];
-        state.matchCounter = 0;
         await loadDirectoryHandle(state.dirHandle, false);
       }
 
@@ -732,14 +728,23 @@ async function executeMoveOperations() {
           }
 
           if ('move' in match.subtitle.handle) {
-            await match.subtitle.handle.move(newFileName);
+            try {
+              await match.subtitle.handle.move(newFileName);
+            } catch (_) {
+              const file = await match.subtitle.handle.getFile();
+              const sourceParent = match.subtitle.parentHandle || state.dirHandle;
+              const newHandle = await sourceParent.getFileHandle(newFileName, { create: true });
+              const writable = await newHandle.createWritable();
+              await writable.write(file);
+              await writable.close();
+              try { await sourceParent.removeEntry(match.subtitle.name); } catch (_) {}
+            }
           } else {
             const file = await match.subtitle.handle.getFile();
-            const content = await file.arrayBuffer();
             const sourceParent = match.subtitle.parentHandle || state.dirHandle;
             const newHandle = await sourceParent.getFileHandle(newFileName, { create: true });
             const writable = await newHandle.createWritable();
-            await writable.write(content);
+            await writable.write(file);
             await writable.close();
             try { await sourceParent.removeEntry(match.subtitle.name); } catch (_) {}
           }
@@ -760,9 +765,12 @@ async function executeMoveOperations() {
 
       hideLoading();
 
+      state.matches = [];
+      state.matchCounter = 0;
+      renderAll();
+      updateDoneButton();
+
       if (state.dirHandle) {
-        state.matches = [];
-        state.matchCounter = 0;
         await loadDirectoryHandle(state.dirHandle, false);
       }
 
