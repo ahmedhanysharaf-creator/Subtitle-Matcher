@@ -433,24 +433,7 @@ function autoMatch() {
 // ─────────────────────────────────────────────────────────
 // Destination Folder Handling
 // ─────────────────────────────────────────────────────────
-async function openDestDirectoryPicker() {
-  if ('showDirectoryPicker' in window) {
-    try {
-      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-      setDestinationFolder(handle, handle.name);
-      showToast(`🎯 Destination set to: ${handle.name}`, 'success');
-      closeDestModal();
-      return;
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        showToast('Could not open destination folder: ' + err.message, 'warning');
-      } else {
-        return;
-      }
-    }
-  }
-
-  // Fallback: Open Destination Modal
+function openDestDirectoryPicker() {
   openDestModal();
 }
 
